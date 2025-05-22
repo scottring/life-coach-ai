@@ -99,7 +99,7 @@ function IntegrationsManager() {
       // Fetch credentials for each service with account details
       const { data: credentialsData, error: credentialsError } = await supabase
         .from('integration_credentials')
-        .select('service, account_label, account_email, is_primary')
+        .select('service, credentials')
         .eq('user_id', user.id);
         
       if (credentialsError) throw credentialsError;
@@ -113,9 +113,18 @@ function IntegrationsManager() {
         
       if (prefsError && prefsError.code !== 'PGRST116') throw prefsError;
       
-      // Group accounts by service
-      const gmailAccounts = credentialsData?.filter(c => c.service === 'gmail') || [];
-      const calendarAccounts = credentialsData?.filter(c => c.service === 'google_calendar') || [];
+      // Group accounts by service and extract account info from credentials
+      const gmailAccounts = credentialsData?.filter(c => c.service === 'gmail').map(c => ({
+        account_label: c.credentials?.account_label || 'Unknown',
+        account_email: c.credentials?.account_email || 'unknown@email.com',
+        is_primary: c.credentials?.is_primary || false
+      })) || [];
+      
+      const calendarAccounts = credentialsData?.filter(c => c.service === 'google_calendar').map(c => ({
+        account_label: c.credentials?.account_label || 'Unknown',
+        account_email: c.credentials?.account_email || 'unknown@email.com',
+        is_primary: c.credentials?.is_primary || false
+      })) || [];
       
       const updatedIntegrations = {
         gmail: { 

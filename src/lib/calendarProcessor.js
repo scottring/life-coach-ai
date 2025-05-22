@@ -1,8 +1,43 @@
 import { openai } from './openaiClient';
 import { supabase } from './supabaseClient';
 
+// Fetch all available calendars for the user
+export async function fetchUserCalendars(accessToken) {
+  try {
+    const response = await fetch(
+      'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch calendars: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    return data.items?.map(calendar => ({
+      id: calendar.id,
+      summary: calendar.summary,
+      description: calendar.description || '',
+      primary: calendar.primary || false,
+      accessRole: calendar.accessRole,
+      backgroundColor: calendar.backgroundColor,
+      foregroundColor: calendar.foregroundColor,
+      selected: calendar.selected !== false, // Default to true unless explicitly false
+      hidden: calendar.hidden || false
+    })) || [];
+  } catch (error) {
+    console.error('Error fetching calendars:', error);
+    return [];
+  }
+}
+
 // Fetch upcoming events from Google Calendar
-export async function fetchUpcomingEvents(accessToken, days = 7) {
+export async function fetchUpcomingEvents(accessToken, days = 7, calendarIds = null) {
   try {
     // Calculate time range
     const now = new Date();
@@ -13,40 +48,69 @@ export async function fetchUpcomingEvents(accessToken, days = 7) {
     const timeMin = now.toISOString();
     const timeMax = end.toISOString();
     
-    // Fetch events from Google Calendar API
-    const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`, 
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
+    let calendarsToFetch = calendarIds;
+    
+    // If no specific calendars provided, fetch all available calendars
+    if (!calendarsToFetch) {
+      console.log('No specific calendars provided, fetching all available calendars...');
+      const userCalendars = await fetchUserCalendars(accessToken);
+      calendarsToFetch = userCalendars
+        .filter(cal => !cal.hidden && cal.accessRole !== 'freeBusyReader')
+        .map(cal => cal.id);
+      console.log(`Found ${calendarsToFetch.length} calendars to sync:`, userCalendars.map(c => c.summary));
+    }
+    
+    const allEvents = [];
+    
+    // Fetch events from each calendar
+    for (const calendarId of calendarsToFetch) {
+      try {
+        console.log(`Fetching events from calendar: ${calendarId}`);
+        const response = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`, 
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          }
+        );
+        
+        if (!response.ok) {
+          console.warn(`Failed to fetch events from calendar ${calendarId}: ${response.status}`);
+          continue;
+        }
+        
+        const data = await response.json();
+        
+        if (data.items && data.items.length > 0) {
+          console.log(`Found ${data.items.length} events in calendar ${calendarId}`);
+          // Process events and add calendar info
+          const events = data.items.map(event => ({
+            id: event.id,
+            calendarId: calendarId,
+            title: event.summary || 'Untitled Event',
+            description: event.description || '',
+            location: event.location || '',
+            start: event.start.dateTime || event.start.date,
+            end: event.end.dateTime || event.end.date,
+            type: determineEventType(event),
+            attendees: event.attendees?.length || 0,
+            status: event.status || 'confirmed'
+          }));
+          
+          allEvents.push(...events);
+        }
+      } catch (calError) {
+        console.error(`Error fetching events from calendar ${calendarId}:`, calError);
+        continue;
       }
-    );
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch calendar events: ${response.status}`);
     }
     
-    const data = await response.json();
+    // Sort all events by start time
+    allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
     
-    if (!data.items || data.items.length === 0) {
-      console.log('No upcoming events found');
-      return [];
-    }
-    
-    // Process events
-    const events = data.items.map(event => ({
-      id: event.id,
-      title: event.summary || 'Untitled Event',
-      description: event.description || '',
-      location: event.location || '',
-      start: event.start.dateTime || event.start.date,
-      end: event.end.dateTime || event.end.date,
-      type: determineEventType(event),
-      attendees: event.attendees?.length || 0
-    }));
-    
-    return events;
+    console.log(`Total events fetched from all calendars: ${allEvents.length}`);
+    return allEvents;
   } catch (error) {
     console.error('Error fetching calendar events:', error);
     return [];
@@ -88,16 +152,16 @@ export async function extractTasksFromEvents(events) {
       ${event.attendees > 0 ? `Attendees: ${event.attendees}` : ''}
       `).join('\n\n')}
       
-      For each task, provide:
-      1. Task title (be specific and clear)
-      2. Priority (1-5, with 5 being highest)
-      3. Due date (in YYYY-MM-DD format, typically before the associated event)
-      4. Context (Work/Personal)
-      5. Brief description (optional)
-      6. Related event ID
+      For each task, provide a JSON object with these exact field names:
+      - "title": Task title (be specific and clear)
+      - "priority": Priority number (1-5, with 5 being highest)
+      - "due_date": Due date (in YYYY-MM-DD format, typically before the associated event)
+      - "context": Either "Work" or "Personal"
+      - "description": Brief description (optional)
+      - "related_event_id": ID of the related calendar event
       
       If no tasks are needed for an event, don't include it.
-      Return the results as a JSON array of objects.
+      Return the results as a JSON array of objects with the exact field names above.
     `;
     
     const completion = await openai.chat.completions.create({
@@ -109,6 +173,8 @@ export async function extractTasksFromEvents(events) {
     });
     
     const content = completion.choices[0].message.content;
+    console.log('OpenAI response for task extraction:', content);
+    
     let tasks = [];
     
     try {
@@ -122,9 +188,16 @@ export async function extractTasksFromEvents(events) {
           tasks = JSON.parse(jsonMatch[0]);
         } catch (e2) {
           console.error('Failed to extract JSON from response:', e2);
+          console.log('Raw response:', content);
+          return []; // Return empty array if we can't parse
         }
+      } else {
+        console.log('No JSON array found in response:', content);
+        return []; // Return empty array if no JSON found
       }
     }
+    
+    console.log('Extracted tasks from OpenAI:', tasks);
     
     // Add source information to each task
     return tasks.map(task => ({
@@ -152,17 +225,29 @@ export async function saveCalendarTasks(tasks) {
     
     // Process each task
     for (const task of tasks) {
+      // Handle different field names from OpenAI
+      const taskTitle = task.title || task.task_title || task.name;
+      const taskDescription = task.description || task.task_description || '';
+      const taskDueDate = task.dueDate || task.due_date || task.deadline || null;
+      const taskRelatedId = task.relatedEventId || task.related_event_id || task.event_id || null;
+      
+      // Skip tasks without a valid title
+      if (!taskTitle || typeof taskTitle !== 'string' || taskTitle.trim() === '') {
+        console.warn('Skipping task with invalid title:', task);
+        continue;
+      }
+      
       // Format task data for database
       const taskData = {
         user_id: user.id,
-        title: task.title,
-        description: task.description || '',
-        deadline: task.dueDate || null,
+        title: taskTitle.trim(),
+        description: taskDescription,
+        deadline: taskDueDate,
         context: task.context || 'Work',
         priority: task.priority || 3,
         status: 'pending',
         source: 'calendar',
-        source_id: task.relatedEventId || null,
+        source_id: taskRelatedId,
         created_at: new Date(),
         updated_at: new Date()
       };
@@ -173,9 +258,10 @@ export async function saveCalendarTasks(tasks) {
         .select();
         
       if (error) {
-        console.error('Error saving calendar task:', error);
+        console.error('Error saving calendar task:', error, 'Task data:', taskData);
       } else if (data) {
         savedTasks.push(data[0]);
+        console.log('Successfully saved calendar task:', data[0].title);
       }
     }
     

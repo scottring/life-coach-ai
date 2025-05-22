@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const GOOGLE_CALENDAR_SCOPE = import.meta.env.VITE_GOOGLE_CALENDAR_SCOPE;
-const REDIRECT_URI = typeof window !== 'undefined' ? `${window.location.origin}/auth/google/callback` : '';
+// For popup OAuth flow, we don't need a redirect URI
 
 // Initialize Google OAuth
 export function initGoogleAuth() {
@@ -39,18 +39,17 @@ export async function startGoogleCalendarAuth(accountLabel = 'Work') {
   try {
     const oauth2 = await initGoogleAuth();
     
-    const client = oauth2.initCodeClient({
+    const client = oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: GOOGLE_CALENDAR_SCOPE,
-      ux_mode: 'popup',
       callback: async (response) => {
-        if (response.code) {
-          await handleAuthCode(response.code, 'google_calendar', accountLabel);
+        if (response.access_token) {
+          await handleAccessToken(response, 'google_calendar', accountLabel);
         }
       },
     });
 
-    client.requestCode();
+    client.requestAccessToken();
   } catch (error) {
     console.error('Error starting Google Calendar auth:', error);
     throw error;
@@ -60,107 +59,111 @@ export async function startGoogleCalendarAuth(accountLabel = 'Work') {
 // Start Google Gmail OAuth flow
 export async function startGoogleGmailAuth(accountLabel = 'Work') {
   try {
-    const oauth2 = await initGoogleAuth();
-    
-    const client = oauth2.initCodeClient({
+    console.log('Starting Gmail auth with:', {
       client_id: GOOGLE_CLIENT_ID,
       scope: import.meta.env.VITE_GOOGLE_GMAIL_SCOPE,
-      ux_mode: 'popup',
+      origin: window.location.origin
+    });
+    
+    const oauth2 = await initGoogleAuth();
+    
+    const client = oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: import.meta.env.VITE_GOOGLE_GMAIL_SCOPE,
       callback: async (response) => {
-        if (response.code) {
-          await handleAuthCode(response.code, 'gmail', accountLabel);
+        console.log('OAuth response:', response);
+        if (response.access_token) {
+          await handleAccessToken(response, 'gmail', accountLabel);
+        } else if (response.error) {
+          console.error('OAuth error:', response.error);
+          alert(`OAuth error: ${response.error}`);
         }
       },
     });
 
-    client.requestCode();
+    client.requestAccessToken();
   } catch (error) {
     console.error('Error starting Google Gmail auth:', error);
     throw error;
   }
 }
 
-// Handle the authorization code from Google
-async function handleAuthCode(authCode, service, accountLabel) {
+// Handle the access token from Google OAuth popup
+async function handleAccessToken(tokenResponse, service, accountLabel) {
   try {
-    // Exchange authorization code for access token
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET,
-        code: authCode,
-        grant_type: 'authorization_code',
-        redirect_uri: REDIRECT_URI,
-      }),
-    });
-
-    if (!tokenResponse.ok) {
-      throw new Error('Failed to exchange authorization code for tokens');
-    }
-
-    const tokens = await tokenResponse.json();
+    console.log('handleAccessToken called with:', { service, accountLabel, tokenResponse });
     
     // Get Google user info to extract email
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: {
-        Authorization: `Bearer ${tokens.access_token}`,
+        Authorization: `Bearer ${tokenResponse.access_token}`,
       },
     });
     
     if (!userInfoResponse.ok) {
+      console.error('Failed to get Google user info:', userInfoResponse.status, userInfoResponse.statusText);
       throw new Error('Failed to get Google user info');
     }
     
     const googleUser = await userInfoResponse.json();
+    console.log('Google user info:', googleUser);
     
     // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error('Auth error:', authError);
       throw new Error('No authenticated user found');
     }
+    console.log('Current user:', user.id);
 
     // Check if this is the first account for this service
-    const { data: existingAccounts } = await supabase
+    const { data: existingAccounts, error: fetchError } = await supabase
       .from('integration_credentials')
       .select('id')
       .eq('user_id', user.id)
       .eq('service', service);
 
-    const isPrimaryAccount = !existingAccounts || existingAccounts.length === 0;
+    if (fetchError) {
+      console.error('Error fetching existing accounts:', fetchError);
+    }
+    console.log('Existing accounts:', existingAccounts);
 
-    // Store credentials in Supabase
-    const { error } = await supabase
-      .from('integration_credentials')
-      .upsert({
-        user_id: user.id,
-        service: service,
+    const isPrimaryAccount = !existingAccounts || existingAccounts.length === 0;
+    console.log('Is primary account:', isPrimaryAccount);
+
+    const credentialsData = {
+      user_id: user.id,
+      service: service,
+      credentials: {
+        access_token: tokenResponse.access_token,
+        refresh_token: null, // Token client doesn't provide refresh tokens
+        expires_at: new Date(Date.now() + (tokenResponse.expires_in || 3600) * 1000).toISOString(),
+        scope: tokenResponse.scope,
         account_label: accountLabel,
         account_email: googleUser.email,
         is_primary: isPrimaryAccount,
-        credentials: {
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token,
-          expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-          scope: tokens.scope,
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id,service,account_email'
-      });
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    
+    console.log('Attempting to upsert credentials:', credentialsData);
 
-    if (error) {
-      throw error;
+    // Store credentials in Supabase
+    const { data: upsertData, error: upsertError } = await supabase
+      .from('integration_credentials')
+      .upsert(credentialsData);
+
+    if (upsertError) {
+      console.error('Upsert error:', upsertError);
+      throw upsertError;
     }
-
+    
+    console.log('Upsert successful:', upsertData);
     console.log(`Successfully connected ${service} (${accountLabel}: ${googleUser.email})!`);
-    return { tokens, accountEmail: googleUser.email };
+    return { tokens: tokenResponse, accountEmail: googleUser.email };
   } catch (error) {
-    console.error('Error handling auth code:', error);
+    console.error('Error handling access token:', error);
     throw error;
   }
 }
@@ -175,32 +178,39 @@ export async function getAccessToken(service, accountEmail = null) {
 
     let query = supabase
       .from('integration_credentials')
-      .select('credentials, account_email, refresh_token')
+      .select('credentials')
       .eq('user_id', user.id)
       .eq('service', service);
 
-    if (accountEmail) {
-      // Get specific account
-      query = query.eq('account_email', accountEmail);
-    } else {
-      // Get primary account
-      query = query.eq('is_primary', true);
-    }
+    const { data, error } = await query;
 
-    const { data, error } = await query.single();
-
-    if (error || !data) {
+    if (error || !data || data.length === 0) {
       return null;
     }
 
-    const credentials = data.credentials;
+    // Find the account we want (specific email or primary)
+    let targetCredentials = null;
+    if (accountEmail) {
+      // Find specific account by email
+      targetCredentials = data.find(item => item.credentials?.account_email === accountEmail);
+    } else {
+      // Find primary account or use first available
+      targetCredentials = data.find(item => item.credentials?.is_primary) || data[0];
+    }
+
+    if (!targetCredentials?.credentials) {
+      return null;
+    }
+
+    const credentials = targetCredentials.credentials;
     const expiresAt = new Date(credentials.expires_at);
     const now = new Date();
 
     // Check if token is expired
     if (expiresAt <= now) {
-      // Refresh the token
-      return await refreshAccessToken(service, credentials.refresh_token, data.account_email);
+      // For now, return null if expired since we don't have refresh tokens with token client
+      console.log('Access token expired, need to re-authenticate');
+      return null;
     }
 
     return credentials.access_token;
@@ -220,17 +230,22 @@ export async function getConnectedAccounts(service) {
 
     const { data, error } = await supabase
       .from('integration_credentials')
-      .select('account_label, account_email, is_primary, created_at')
+      .select('credentials, created_at')
       .eq('user_id', user.id)
       .eq('service', service)
-      .order('is_primary', { ascending: false })
       .order('created_at', { ascending: true });
 
     if (error) {
       throw error;
     }
 
-    return data || [];
+    // Extract account info from credentials
+    return data?.map(item => ({
+      account_label: item.credentials?.account_label || 'Unknown',
+      account_email: item.credentials?.account_email || 'unknown@email.com',
+      is_primary: item.credentials?.is_primary || false,
+      created_at: item.created_at
+    })) || [];
   } catch (error) {
     console.error('Error getting connected accounts:', error);
     return [];
@@ -311,22 +326,34 @@ export async function disconnectGoogleService(service, accountEmail = null) {
     }
 
     // Remove credentials from database
-    let query = supabase
-      .from('integration_credentials')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('service', service);
-
     if (accountEmail) {
-      // Remove specific account
-      query = query.eq('account_email', accountEmail);
+      // Remove specific account by finding it in the credentials
+      const { data: credentials } = await supabase
+        .from('integration_credentials')
+        .select('id, credentials')
+        .eq('user_id', user.id)
+        .eq('service', service);
+      
+      const targetRecord = credentials?.find(item => item.credentials?.account_email === accountEmail);
+      if (targetRecord) {
+        const { error: deleteError } = await supabase
+          .from('integration_credentials')
+          .delete()
+          .eq('id', targetRecord.id);
+        
+        if (deleteError) throw deleteError;
+      }
+    } else {
+      // Remove all accounts for this service
+      const { error: deleteError } = await supabase
+        .from('integration_credentials')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('service', service);
+      
+      if (deleteError) throw deleteError;
     }
 
-    const { error } = await query;
-
-    if (error) {
-      throw error;
-    }
 
     console.log(`Successfully disconnected ${service}${accountEmail ? ` (${accountEmail})` : ''}!`);
     return true;
@@ -347,23 +374,28 @@ export async function setPrimaryAccount(service, accountEmail) {
       throw new Error('No authenticated user found');
     }
 
-    // First, unset all accounts as primary for this service
-    await supabase
+    // Get all credentials for this service
+    const { data: credentials } = await supabase
       .from('integration_credentials')
-      .update({ is_primary: false })
+      .select('id, credentials')
       .eq('user_id', user.id)
       .eq('service', service);
 
-    // Then set the specified account as primary
-    const { error } = await supabase
-      .from('integration_credentials')
-      .update({ is_primary: true })
-      .eq('user_id', user.id)
-      .eq('service', service)
-      .eq('account_email', accountEmail);
+    if (!credentials || credentials.length === 0) {
+      throw new Error('No credentials found for this service');
+    }
 
-    if (error) {
-      throw error;
+    // Update all accounts to unset primary, then set the target as primary
+    for (const item of credentials) {
+      const updatedCredentials = {
+        ...item.credentials,
+        is_primary: item.credentials?.account_email === accountEmail
+      };
+
+      await supabase
+        .from('integration_credentials')
+        .update({ credentials: updatedCredentials })
+        .eq('id', item.id);
     }
 
     console.log(`Successfully set ${accountEmail} as primary for ${service}!`);

@@ -23,10 +23,9 @@ export function useGmailIntegration() {
         .from('integration_credentials')
         .select('credentials')
         .eq('user_id', user.id)
-        .eq('service', 'gmail')
-        .single();
+        .eq('service', 'gmail');
       
-      if (!credentials) {
+      if (!credentials || credentials.length === 0) {
         console.log('Gmail not connected - using mock data');
         // Use mock data for development
         setTimeout(() => {
@@ -36,7 +35,9 @@ export function useGmailIntegration() {
         return;
       }
       
-      const accessToken = credentials.credentials.access_token;
+      // Use primary account or first available
+      const primaryAccount = credentials.find(item => item.credentials?.is_primary) || credentials[0];
+      const accessToken = primaryAccount.credentials.access_token;
       
       // Process emails
       await processEmails(accessToken);

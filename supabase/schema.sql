@@ -279,3 +279,294 @@ BEGIN
   LIMIT match_count;
 END;
 $$;
+
+-- Family Tables
+
+-- Family groups
+CREATE TABLE families (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(100) NOT NULL,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Family members
+CREATE TABLE family_members (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  family_id UUID REFERENCES families(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id),
+  name VARCHAR(100) NOT NULL,
+  role VARCHAR(50) DEFAULT 'member', -- 'admin', 'parent', 'child', 'member'
+  avatar_color VARCHAR(20) DEFAULT '#3B82F6',
+  email VARCHAR(255),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(family_id, user_id)
+);
+
+-- Family meals
+CREATE TABLE family_meals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  family_id UUID REFERENCES families(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  meal_type VARCHAR(20) NOT NULL, -- 'breakfast', 'lunch', 'dinner'
+  dish VARCHAR(200) NOT NULL,
+  notes TEXT,
+  assigned_to UUID REFERENCES family_members(id),
+  created_by UUID REFERENCES family_members(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(family_id, date, meal_type)
+);
+
+-- Shopping list items
+CREATE TABLE shopping_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  family_id UUID REFERENCES families(id) ON DELETE CASCADE,
+  item VARCHAR(200) NOT NULL,
+  category VARCHAR(50),
+  quantity VARCHAR(50),
+  is_checked BOOLEAN DEFAULT FALSE,
+  added_by UUID REFERENCES family_members(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Family tasks (extends regular tasks for family context)
+CREATE TABLE family_tasks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  family_id UUID REFERENCES families(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  task_type VARCHAR(20) DEFAULT 'task', -- 'task', 'chore'
+  priority INTEGER DEFAULT 3,
+  status VARCHAR(20) DEFAULT 'pending',
+  deadline TIMESTAMPTZ,
+  assigned_to UUID REFERENCES family_members(id),
+  created_by UUID REFERENCES family_members(id),
+  is_recurring BOOLEAN DEFAULT FALSE,
+  recurrence_pattern JSONB, -- {type: 'weekly', days: ['monday'], interval: 1}
+  points INTEGER DEFAULT 0, -- For gamification
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Family goals
+CREATE TABLE family_goals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  family_id UUID REFERENCES families(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  target_value NUMERIC,
+  current_value NUMERIC DEFAULT 0,
+  unit VARCHAR(50), -- 'dollars', 'days', 'points', etc.
+  timeframe VARCHAR(20) DEFAULT 'month',
+  status VARCHAR(20) DEFAULT 'active',
+  deadline TIMESTAMPTZ,
+  created_by UUID REFERENCES family_members(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Family milestones
+CREATE TABLE family_milestones (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  family_id UUID REFERENCES families(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  date TIMESTAMPTZ NOT NULL,
+  category VARCHAR(50), -- 'birthday', 'anniversary', 'graduation', 'vacation', etc.
+  is_completed BOOLEAN DEFAULT FALSE,
+  created_by UUID REFERENCES family_members(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Family activity log
+CREATE TABLE family_activities (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  family_id UUID REFERENCES families(id) ON DELETE CASCADE,
+  member_id UUID REFERENCES family_members(id),
+  activity_type VARCHAR(50) NOT NULL, -- 'task_completed', 'chore_done', 'goal_progress', etc.
+  description TEXT NOT NULL,
+  points_earned INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Row Level Security for Family Tables
+
+-- Families
+ALTER TABLE families ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view families they belong to" ON families FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = families.id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can create families" ON families FOR INSERT
+  WITH CHECK (auth.uid() = created_by);
+
+CREATE POLICY "Family admins can update families" ON families FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = families.id 
+      AND family_members.user_id = auth.uid()
+      AND family_members.role IN ('admin', 'parent')
+    )
+  );
+
+-- Family Members
+ALTER TABLE family_members ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view family members" ON family_members FOR SELECT
+  USING (
+    user_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM family_members fm
+      WHERE fm.family_id = family_members.family_id 
+      AND fm.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Family admins can manage members" ON family_members FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members fm
+      WHERE fm.family_id = family_members.family_id 
+      AND fm.user_id = auth.uid()
+      AND fm.role IN ('admin', 'parent')
+    )
+  );
+
+-- Family Meals
+ALTER TABLE family_meals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Family members can view meals" ON family_meals FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_meals.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Family members can manage meals" ON family_meals FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_meals.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+-- Shopping Items
+ALTER TABLE shopping_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Family members can view shopping items" ON shopping_items FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = shopping_items.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Family members can manage shopping items" ON shopping_items FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = shopping_items.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+-- Family Tasks
+ALTER TABLE family_tasks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Family members can view family tasks" ON family_tasks FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_tasks.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Family members can manage family tasks" ON family_tasks FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_tasks.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+-- Family Goals
+ALTER TABLE family_goals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Family members can view family goals" ON family_goals FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_goals.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Family members can manage family goals" ON family_goals FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_goals.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+-- Family Milestones
+ALTER TABLE family_milestones ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Family members can view family milestones" ON family_milestones FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_milestones.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Family members can manage family milestones" ON family_milestones FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_milestones.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+-- Family Activities
+ALTER TABLE family_activities ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Family members can view activities" ON family_activities FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_activities.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Family members can create activities" ON family_activities FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM family_members 
+      WHERE family_members.family_id = family_activities.family_id 
+      AND family_members.user_id = auth.uid()
+    )
+  );

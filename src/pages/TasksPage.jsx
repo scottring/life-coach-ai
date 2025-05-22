@@ -208,10 +208,9 @@ function TasksPage() {
             
             <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:align-middle">
               <TaskDetail 
-                task={selectedTask}
+                taskId={selectedTask?.id}
                 onClose={() => setShowDetailModal(false)}
-                onUpdate={handleTaskUpdate}
-                onStatusChange={handleStatusChange}
+                onTaskUpdate={handleTaskUpdate}
               />
             </div>
           </div>

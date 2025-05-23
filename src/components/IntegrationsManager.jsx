@@ -3,16 +3,19 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuthState } from '../hooks/useAuthState';
 import { useGmailIntegration } from '../hooks/useGmailIntegration';
 import { useCalendarIntegration } from '../hooks/useCalendarIntegration';
+import { triggerN8nWorkflow } from '../lib/n8nWebhookHandler';
 
 function IntegrationsManager() {
   const { user } = useAuthState();
   const [integrations, setIntegrations] = useState({
     gmail: { accounts: [], lastSync: null },
     calendar: { accounts: [], lastSync: null },
-    notion: { connected: false, lastSync: null }
+    notion: { connected: false, lastSync: null },
+    n8n: { connected: false, url: null }
   });
   
   const [loading, setLoading] = useState(true);
+  const [n8nSyncing, setN8nSyncing] = useState(false);
   const { syncing: syncingGmail, lastSync: lastGmailSync, syncEmails, error: gmailError } = useGmailIntegration();
   const { loading: loadingCalendar, lastSync: lastCalendarSync, fetchEvents } = useCalendarIntegration();
 
@@ -138,6 +141,10 @@ function IntegrationsManager() {
         notion: { 
           connected: credentialsData?.some(c => c.service === 'notion') || false,
           lastSync: prefsData?.last_notion_sync ? new Date(prefsData.last_notion_sync) : null
+        },
+        n8n: {
+          connected: !!prefsData?.n8n_url,
+          url: prefsData?.n8n_url || null
         }
       };
       
@@ -194,13 +201,35 @@ function IntegrationsManager() {
             </div>
             
             <div className="flex space-x-2">
-              {integrations.gmail.accounts.length > 0 && (
+              {integrations.gmail.accounts.length > 0 && integrations.n8n.connected && (
+                <button 
+                  onClick={async () => {
+                    setN8nSyncing(true);
+                    try {
+                      await triggerN8nWorkflow('gmail-task-extractor', integrations.n8n.url);
+                      // Refresh integration status after sync
+                      setTimeout(fetchIntegrations, 2000);
+                    } catch (error) {
+                      console.error('Failed to trigger Gmail sync:', error);
+                      alert('Failed to sync Gmail. Check n8n connection.');
+                    } finally {
+                      setN8nSyncing(false);
+                    }
+                  }}
+                  disabled={n8nSyncing}
+                  className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-800 hover:bg-gray-200 disabled:opacity-50"
+                >
+                  {n8nSyncing ? 'Syncing...' : 'Sync via n8n'}
+                </button>
+              )}
+              
+              {integrations.gmail.accounts.length > 0 && !integrations.n8n.connected && (
                 <button 
                   onClick={syncEmails}
                   disabled={syncingGmail}
                   className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-800 hover:bg-gray-200 disabled:opacity-50"
                 >
-                  {syncingGmail ? 'Syncing...' : 'Sync All'}
+                  {syncingGmail ? 'Syncing...' : 'Sync Direct'}
                 </button>
               )}
               
@@ -299,13 +328,35 @@ function IntegrationsManager() {
             </div>
             
             <div className="flex space-x-2">
-              {integrations.calendar.accounts.length > 0 && (
+              {integrations.calendar.accounts.length > 0 && integrations.n8n.connected && (
+                <button 
+                  onClick={async () => {
+                    setN8nSyncing(true);
+                    try {
+                      await triggerN8nWorkflow('calendar-task-extractor', integrations.n8n.url);
+                      // Refresh integration status after sync
+                      setTimeout(fetchIntegrations, 2000);
+                    } catch (error) {
+                      console.error('Failed to trigger Calendar sync:', error);
+                      alert('Failed to sync Calendar. Check n8n connection.');
+                    } finally {
+                      setN8nSyncing(false);
+                    }
+                  }}
+                  disabled={n8nSyncing}
+                  className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-800 hover:bg-gray-200 disabled:opacity-50"
+                >
+                  {n8nSyncing ? 'Syncing...' : 'Sync via n8n'}
+                </button>
+              )}
+              
+              {integrations.calendar.accounts.length > 0 && !integrations.n8n.connected && (
                 <button 
                   onClick={() => fetchEvents()}
                   disabled={loadingCalendar}
                   className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-800 hover:bg-gray-200 disabled:opacity-50"
                 >
-                  {loadingCalendar ? 'Syncing...' : 'Sync All'}
+                  {loadingCalendar ? 'Syncing...' : 'Sync Direct'}
                 </button>
               )}
               
@@ -364,6 +415,84 @@ function IntegrationsManager() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+        
+        {/* n8n Integration */}
+        <div className="rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-medium text-gray-800">n8n Automation</h3>
+                <p className="text-sm text-gray-500">
+                  {integrations.n8n.connected 
+                    ? `Connected to: ${integrations.n8n.url}` 
+                    : 'Not configured'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex space-x-2">
+              {!integrations.n8n.connected && (
+                <button 
+                  onClick={async () => {
+                    const url = prompt('Enter your n8n instance URL (e.g., https://your-n8n.domain.com)');
+                    if (url) {
+                      try {
+                        await supabase
+                          .from('user_preferences')
+                          .update({ n8n_url: url })
+                          .eq('user_id', user.id);
+                        fetchIntegrations();
+                      } catch (error) {
+                        console.error('Error saving n8n URL:', error);
+                        alert('Failed to save n8n URL');
+                      }
+                    }
+                  }}
+                  className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Configure
+                </button>
+              )}
+              
+              {integrations.n8n.connected && (
+                <button 
+                  onClick={async () => {
+                    if (confirm('Remove n8n configuration?')) {
+                      try {
+                        await supabase
+                          .from('user_preferences')
+                          .update({ n8n_url: null, n8n_webhooks: null })
+                          .eq('user_id', user.id);
+                        fetchIntegrations();
+                      } catch (error) {
+                        console.error('Error removing n8n config:', error);
+                        alert('Failed to remove n8n configuration');
+                      }
+                    }
+                  }}
+                  className="rounded bg-gray-100 px-3 py-1 text-sm font-medium text-gray-800 hover:bg-gray-200"
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {integrations.n8n.connected && (
+            <div className="mt-3 rounded-md bg-orange-50 p-3">
+              <p className="text-xs text-orange-700">
+                <strong>Webhook URLs for n8n:</strong><br/>
+                Gmail: {window.location.origin}/api/n8n/gmail-tasks<br/>
+                Calendar: {window.location.origin}/api/n8n/calendar-tasks
+              </p>
             </div>
           )}
         </div>

@@ -36,9 +36,11 @@ Make sure it has:
 - **Authorized JavaScript origins**:
   ```
   http://localhost:5173
-  http://localhost:3000
   http://localhost:5174
+  http://localhost:3000
+  http://localhost:5000
   ```
+- Also add your production URL if deploying (e.g., https://your-app.vercel.app)
 
 ### 4. Test API Access
 

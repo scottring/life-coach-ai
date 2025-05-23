@@ -1,0 +1,302 @@
+{
+  "name": "Calendar Work+Personal Task Extractor",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Hourly Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{$now.toISO()}}",
+          "timeMax": "={{$now.plus(14, 'days').toISO()}}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "get-work-calendar",
+      "name": "Get Work Calendar Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 200],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "work-calendar",
+          "name": "Google Calendar OAuth2 API - Work"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{$now.toISO()}}",
+          "timeMax": "={{$now.plus(14, 'days').toISO()}}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "get-personal-calendar",
+      "name": "Get Personal Calendar Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 400],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "personal-calendar",
+          "name": "Google Calendar OAuth2 API - Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Add account type to each event\nconst workEvents = $input.all()[0].json.map(event => ({\n  ...event,\n  accountType: 'work',\n  accountEmail: 'scott.kaufman@stacksdata.com'\n}));\n\nreturn workEvents.map(event => ({ json: event }));"
+      },
+      "id": "tag-work-events",
+      "name": "Tag Work Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Add account type to each event\nconst personalEvents = $input.all()[0].json.map(event => ({\n  ...event,\n  accountType: 'personal',\n  accountEmail: 'smkaufman@gmail.com'\n}));\n\nreturn personalEvents.map(event => ({ json: event }));"
+      },
+      "id": "tag-personal-events",
+      "name": "Tag Personal Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {},
+      "id": "merge-events",
+      "name": "Merge All Events",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "batch-events",
+      "name": "Batch Events (10 at a time)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "modelId": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert at extracting preparation tasks from calendar events. Understand the context (work vs personal) and extract appropriate tasks. Return ONLY a JSON array."
+            },
+            {
+              "role": "user",
+              "content": "Extract preparation tasks from these calendar events:\\n\\n{{$json[\"items\"].map(event => `\\nEvent: ${event.summary}\\nAccount: ${event.accountType} (${event.accountEmail})\\nTime: ${event.start.dateTime || event.start.date}\\nDescription: ${event.description || 'None'}\\nLocation: ${event.location || 'None'}\\nAttendees: ${event.attendees?.length || 0}`).join('\\n---')}}\\n\\nRules:\\n- For WORK events: Focus on meeting prep, documents to review, presentations to prepare\\n- For PERSONAL events: Focus on appointments, family events, personal preparations\\n- Set appropriate context based on account type\\n- Higher priority for imminent events\\n\\nFor each task return:\\n{\\n  \"title\": \"Clear preparation task\",\\n  \"description\": \"What needs to be done\",\\n  \"priority\": 1-5,\\n  \"dueDate\": \"YYYY-MM-DD\" (usually 1 day before event),\\n  \"context\": \"Work\"/\"Personal\"/\"Family\",\\n  \"relatedEventId\": \"calendar_event_id\",\\n  \"accountType\": \"work\" or \"personal\",\\n  \"accountEmail\": \"email@domain.com\"\\n}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "extract-tasks-batch",
+      "name": "Extract Tasks from Event Batch",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-api",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const tasksJson = $input.first().json.message.content;\nlet tasks = [];\n\ntry {\n  tasks = JSON.parse(tasksJson);\n} catch (e) {\n  const match = tasksJson.match(/\\[.*\\]/s);\n  if (match) {\n    tasks = JSON.parse(match[0]);\n  }\n}\n\n// Filter out past due dates\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\nconst validTasks = tasks.filter(task => {\n  if (!task.dueDate) return true;\n  const dueDate = new Date(task.dueDate);\n  return dueDate >= today;\n});\n\nreturn validTasks.map(task => ({\n  json: {\n    ...task,\n    source: 'calendar',\n    extractedAt: new Date().toISOString()\n  }\n}));"
+      },
+      "id": "process-calendar-tasks",
+      "name": "Process and Filter Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env[\"WEBHOOK_URL\"]}}/api/n8n/calendar-tasks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "={{$env[\"WEBHOOK_SECRET\"]}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tasks",
+              "value": "={{$json[\"items\"]}}"
+            },
+            {
+              "name": "processedAt",
+              "value": "={{$now.toISO()}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-tasks",
+      "name": "Send Tasks to Life Coach AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Hourly Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Work Calendar Events",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Personal Calendar Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Work Calendar Events": {
+      "main": [
+        [
+          {
+            "node": "Tag Work Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Personal Calendar Events": {
+      "main": [
+        [
+          {
+            "node": "Tag Personal Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Work Events": {
+      "main": [
+        [
+          {
+            "node": "Merge All Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Personal Events": {
+      "main": [
+        [
+          {
+            "node": "Merge All Events",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge All Events": {
+      "main": [
+        [
+          {
+            "node": "Batch Events (10 at a time)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Events (10 at a time)": {
+      "main": [
+        [
+          {
+            "node": "Extract Tasks from Event Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Tasks from Event Batch": {
+      "main": [
+        [
+          {
+            "node": "Process and Filter Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process and Filter Tasks": {
+      "main": [
+        [
+          {
+            "node": "Send Tasks to Life Coach AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

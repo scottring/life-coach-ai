@@ -1,0 +1,204 @@
+{
+  "name": "Calendar Work Task Extractor",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "cronExpression",
+              "cronExpression": "0 */30 8-18 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "work-schedule-trigger",
+      "name": "Work Hours Schedule (30min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{$now.toISO()}}",
+          "timeMax": "={{$now.plus(7, 'days').toISO()}}",
+          "singleEvents": true,
+          "orderBy": "startTime",
+          "q": ""
+        }
+      },
+      "id": "get-work-calendar-events",
+      "name": "Get Work Calendar Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "work-calendar",
+          "name": "Google Calendar OAuth2 API - Work"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter and enrich work events\nconst events = $input.all()[0].json;\n\n// Filter out all-day events that are likely holidays\nconst relevantEvents = events.filter(event => {\n  // Skip if declined\n  if (event.attendees?.find(a => a.self && a.responseStatus === 'declined')) {\n    return false;\n  }\n  \n  // Skip if marked as free time\n  if (event.transparency === 'transparent') {\n    return false;\n  }\n  \n  return true;\n});\n\nreturn relevantEvents.map(event => ({\n  json: {\n    id: event.id,\n    summary: event.summary || 'Untitled Event',\n    description: event.description || '',\n    start: event.start,\n    end: event.end,\n    location: event.location || '',\n    attendees: event.attendees || [],\n    organizer: event.organizer,\n    conferenceData: event.conferenceData,\n    // Work-specific metadata\n    isClientMeeting: (event.summary?.toLowerCase().includes('client') || \n                     event.attendees?.some(a => a.email?.includes('@client.com'))),\n    isOneOnOne: event.attendees?.length === 2,\n    isLargeMeeting: event.attendees?.length > 5,\n    accountType: 'work',\n    accountEmail: 'scott.kaufman@stacksdata.com'\n  }\n}));"
+      },
+      "id": "filter-work-events",
+      "name": "Filter & Enrich Work Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "modelId": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert at extracting work-related preparation tasks from professional calendar events. Focus on actionable items needed BEFORE meetings.\n\nPrioritize:\n- Client meetings (priority 5)\n- One-on-ones with manager/reports (priority 4)\n- Team meetings with deliverables (priority 4)\n- Regular team meetings (priority 3)\n- Optional/informational meetings (priority 2)\n\nReturn ONLY a JSON array of tasks."
+            },
+            {
+              "role": "user",
+              "content": "Extract preparation tasks from these WORK calendar events:\\n\\n{{$json[\"items\"].map(event => `\\nEvent: ${event.summary}\\nTime: ${new Date(event.start.dateTime || event.start.date).toLocaleString()}\\nDuration: ${((new Date(event.end.dateTime || event.end.date) - new Date(event.start.dateTime || event.start.date)) / 60000)} minutes\\nDescription: ${event.description || 'None'}\\nLocation: ${event.location || 'None'}\\nAttendees: ${event.attendees?.length || 0} people\\nOrganizer: ${event.organizer?.email || 'Unknown'}\\nIs Client Meeting: ${event.isClientMeeting}\\nIs 1:1: ${event.isOneOnOne}\\nConference Link: ${event.conferenceData ? 'Yes' : 'No'}`).join('\\n---')}}\\n\\nExtract tasks like:\\n- Review documents/agenda before meetings\\n- Prepare presentations or demos\\n- Gather metrics/data for reviews\\n- Prepare questions for 1:1s\\n- Complete pre-reads\\n- Test conference links\\n\\nFor each task return:\\n{\\n  \"title\": \"Specific preparation task\",\\n  \"description\": \"Details about what to prepare\",\\n  \"priority\": 1-5 (based on meeting importance),\\n  \"dueDate\": \"YYYY-MM-DD\" (day before meeting),\\n  \"context\": \"Work\",\\n  \"relatedEventId\": \"event_id\",\\n  \"relatedEventTitle\": \"meeting_name\"\\n}\\n\\nOnly create tasks for meetings that need preparation."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "extract-work-calendar-tasks",
+      "name": "Extract Work Meeting Prep Tasks",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-api",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const tasksJson = $input.first().json.message.content;\nlet tasks = [];\n\ntry {\n  tasks = JSON.parse(tasksJson);\n} catch (e) {\n  const match = tasksJson.match(/\\[.*\\]/s);\n  if (match) {\n    tasks = JSON.parse(match[0]);\n  }\n}\n\n// Filter out past due dates and add metadata\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\nconst validTasks = tasks.filter(task => {\n  if (!task.dueDate) return true;\n  const dueDate = new Date(task.dueDate);\n  return dueDate >= today;\n});\n\nreturn validTasks.map(task => ({\n  json: {\n    ...task,\n    source: 'calendar',\n    accountType: 'work',\n    accountEmail: 'scott.kaufman@stacksdata.com',\n    extractedAt: new Date().toISOString()\n  }\n}));"
+      },
+      "id": "process-work-calendar-tasks",
+      "name": "Process Work Calendar Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env[\"WEBHOOK_URL\"]}}/api/n8n/calendar-tasks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Account-Type",
+              "value": "work"
+            },
+            {
+              "name": "X-Account-Email", 
+              "value": "scott.kaufman@stacksdata.com"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "={{$env[\"WEBHOOK_SECRET\"]}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tasks",
+              "value": "={{$json[\"items\"]}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-work-calendar-tasks",
+      "name": "Send to Life Coach AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "Work Hours Schedule (30min)": {
+      "main": [
+        [
+          {
+            "node": "Get Work Calendar Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Work Calendar Events": {
+      "main": [
+        [
+          {
+            "node": "Filter & Enrich Work Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter & Enrich Work Events": {
+      "main": [
+        [
+          {
+            "node": "Extract Work Meeting Prep Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Work Meeting Prep Tasks": {
+      "main": [
+        [
+          {
+            "node": "Process Work Calendar Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Work Calendar Tasks": {
+      "main": [
+        [
+          {
+            "node": "Send to Life Coach AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

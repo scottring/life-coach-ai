@@ -1,0 +1,202 @@
+{
+  "name": "Calendar Personal Task Extractor",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        }
+      },
+      "id": "personal-schedule-trigger",
+      "name": "Hourly Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{$now.toISO()}}",
+          "timeMax": "={{$now.plus(14, 'days').toISO()}}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "get-personal-calendar-events",
+      "name": "Get Personal Calendar Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "personal-calendar",
+          "name": "Google Calendar OAuth2 API - Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter and categorize personal events\nconst events = $input.all()[0].json;\n\n// Categorize personal events\nconst categorizedEvents = events.map(event => {\n  const summary = (event.summary || '').toLowerCase();\n  const description = (event.description || '').toLowerCase();\n  const location = (event.location || '').toLowerCase();\n  \n  // Determine event category\n  let category = 'personal';\n  let importance = 'normal';\n  \n  // Health-related (highest priority)\n  if (summary.includes('doctor') || summary.includes('dentist') || \n      summary.includes('therapy') || summary.includes('medical') ||\n      summary.includes('vet') || summary.includes('jax')) {\n    category = 'health';\n    importance = 'high';\n  }\n  // Family events\n  else if (summary.includes('family') || summary.includes('parents') ||\n           summary.includes('birthday') || summary.includes('anniversary')) {\n    category = 'family';\n    importance = 'high';\n  }\n  // Home/maintenance\n  else if (summary.includes('repair') || summary.includes('maintenance') ||\n           summary.includes('contractor') || summary.includes('delivery')) {\n    category = 'home';\n    importance = 'medium';\n  }\n  // Social\n  else if (summary.includes('dinner') || summary.includes('party') ||\n           summary.includes('wedding') || summary.includes('drinks')) {\n    category = 'social';\n    importance = 'medium';\n  }\n  \n  return {\n    ...event,\n    category,\n    importance,\n    accountType: 'personal',\n    accountEmail: 'smkaufman@gmail.com'\n  };\n});\n\nreturn categorizedEvents.map(event => ({ json: event }));"
+      },
+      "id": "categorize-personal-events",
+      "name": "Categorize Personal Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "message",
+        "modelId": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert at extracting personal and family preparation tasks from calendar events. Be thoughtful about personal commitments and family needs.\n\nPriority guidelines:\n- Health appointments (doctor, vet): Priority 5\n- Family events/commitments: Priority 4\n- Home maintenance/repairs: Priority 4\n- Social events requiring prep: Priority 3\n- Casual social events: Priority 2\n\nReturn ONLY a JSON array of tasks."
+            },
+            {
+              "role": "user",
+              "content": "Extract preparation tasks from these PERSONAL calendar events:\\n\\n{{$json[\"items\"].map(event => `\\nEvent: ${event.summary}\\nCategory: ${event.category} (${event.importance} importance)\\nTime: ${new Date(event.start.dateTime || event.start.date).toLocaleString()}\\nDescription: ${event.description || 'None'}\\nLocation: ${event.location || 'None'}`).join('\\n---')}}\\n\\nExtract tasks like:\\n- Prepare documents for appointments\\n- Arrange transportation/childcare\\n- Buy gifts for celebrations\\n- Prepare questions for doctor/vet\\n- Make reservations\\n- Coordinate with family members\\n- Prepare home for guests/repairs\\n\\nFor each task return:\\n{\\n  \"title\": \"Specific preparation task\",\\n  \"description\": \"What needs to be done and why\",\\n  \"priority\": 1-5 (based on event importance),\\n  \"dueDate\": \"YYYY-MM-DD\" (appropriate lead time),\\n  \"context\": \"Personal\" or \"Family\",\\n  \"relatedEventId\": \"event_id\",\\n  \"relatedEventTitle\": \"event_name\"\\n}\\n\\nBe especially thorough for health appointments and family events."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "extract-personal-calendar-tasks",
+      "name": "Extract Personal Event Tasks",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-api",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const tasksJson = $input.first().json.message.content;\nlet tasks = [];\n\ntry {\n  tasks = JSON.parse(tasksJson);\n} catch (e) {\n  const match = tasksJson.match(/\\[.*\\]/s);\n  if (match) {\n    tasks = JSON.parse(match[0]);\n  }\n}\n\n// Filter out past due dates and add metadata\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\nconst validTasks = tasks.filter(task => {\n  if (!task.dueDate) return true;\n  const dueDate = new Date(task.dueDate);\n  return dueDate >= today;\n});\n\nreturn validTasks.map(task => ({\n  json: {\n    ...task,\n    source: 'calendar',\n    accountType: 'personal',\n    accountEmail: 'smkaufman@gmail.com',\n    extractedAt: new Date().toISOString()\n  }\n}));"
+      },
+      "id": "process-personal-calendar-tasks",
+      "name": "Process Personal Calendar Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env[\"WEBHOOK_URL\"]}}/api/n8n/calendar-tasks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Account-Type",
+              "value": "personal"
+            },
+            {
+              "name": "X-Account-Email",
+              "value": "smkaufman@gmail.com"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "={{$env[\"WEBHOOK_SECRET\"]}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tasks",
+              "value": "={{$json[\"items\"]}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-personal-calendar-tasks",
+      "name": "Send to Life Coach AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "Hourly Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Personal Calendar Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Personal Calendar Events": {
+      "main": [
+        [
+          {
+            "node": "Categorize Personal Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Categorize Personal Events": {
+      "main": [
+        [
+          {
+            "node": "Extract Personal Event Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Personal Event Tasks": {
+      "main": [
+        [
+          {
+            "node": "Process Personal Calendar Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Personal Calendar Tasks": {
+      "main": [
+        [
+          {
+            "node": "Send to Life Coach AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

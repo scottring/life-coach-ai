@@ -35,6 +35,22 @@ function Task({ task, onStatusChange }) {
     : task.context === 'Personal' 
       ? '🏠' 
       : '📝';
+
+  // Determine source icon and label
+  const getSourceInfo = (source) => {
+    switch (source) {
+      case 'calendar':
+        return { icon: '📅', label: 'Calendar' };
+      case 'email':
+        return { icon: '📧', label: 'Email' };
+      case 'manual':
+        return { icon: '✏️', label: 'Manual' };
+      default:
+        return { icon: '📝', label: 'Task' };
+    }
+  };
+  
+  const sourceInfo = getSourceInfo(task.source);
   
   return (
     <div className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm ${priorityClass}`}>
@@ -54,6 +70,22 @@ function Task({ task, onStatusChange }) {
             </h3>
             {task.description && (
               <p className="mt-1 text-sm text-gray-600">{task.description}</p>
+            )}
+            {/* Source indicator */}
+            {task.source && task.source !== 'manual' && (
+              <div className="mt-2 flex items-center space-x-1">
+                <span className="text-xs" title={`Source: ${sourceInfo.label}`}>
+                  {sourceInfo.icon}
+                </span>
+                <span className="text-xs text-gray-500 capitalize">
+                  {sourceInfo.label}
+                </span>
+                {task.source_id && (
+                  <span className="text-xs text-gray-400">
+                    • ID: {task.source_id.substring(0, 8)}...
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>

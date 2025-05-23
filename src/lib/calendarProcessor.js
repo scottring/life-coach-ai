@@ -1,5 +1,6 @@
 import { openai } from './openaiClient';
 import { supabase } from './supabaseClient';
+import { DeduplicationService } from './deduplicationService';
 
 // Fetch all available calendars for the user
 export async function fetchUserCalendars(accessToken) {
@@ -106,11 +107,14 @@ export async function fetchUpcomingEvents(accessToken, days = 7, calendarIds = n
       }
     }
     
-    // Sort all events by start time
-    allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+    // Deduplicate events from shared calendars
+    const uniqueEvents = DeduplicationService.deduplicateCalendarEvents(allEvents);
     
-    console.log(`Total events fetched from all calendars: ${allEvents.length}`);
-    return allEvents;
+    // Sort all events by start time
+    uniqueEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+    
+    console.log(`Total events fetched: ${allEvents.length}, unique events after deduplication: ${uniqueEvents.length}`);
+    return uniqueEvents;
   } catch (error) {
     console.error('Error fetching calendar events:', error);
     return [];
@@ -239,29 +243,27 @@ export async function saveCalendarTasks(tasks) {
       
       // Format task data for database
       const taskData = {
-        user_id: user.id,
         title: taskTitle.trim(),
         description: taskDescription,
         deadline: taskDueDate,
         context: task.context || 'Work',
         priority: task.priority || 3,
-        status: 'pending',
-        source: 'calendar',
-        source_id: taskRelatedId,
-        created_at: new Date(),
-        updated_at: new Date()
+        status: 'pending'
       };
       
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert([taskData])
-        .select();
-        
-      if (error) {
-        console.error('Error saving calendar task:', error, 'Task data:', taskData);
-      } else if (data) {
-        savedTasks.push(data[0]);
-        console.log('Successfully saved calendar task:', data[0].title);
+      // Use deduplication service to create task only if unique
+      const savedTask = await DeduplicationService.createTaskIfUnique(
+        user.id, 
+        taskData, 
+        'calendar', 
+        taskRelatedId
+      );
+      
+      if (savedTask) {
+        savedTasks.push(savedTask);
+        console.log('Successfully saved unique calendar task:', savedTask.title);
+      } else {
+        console.log('Skipped duplicate calendar task:', taskTitle);
       }
     }
     

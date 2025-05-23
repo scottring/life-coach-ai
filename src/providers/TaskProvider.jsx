@@ -3,6 +3,7 @@ import { useAuthState } from '../hooks/useAuthState';
 import { supabase } from '../lib/supabaseClient';
 import { Task } from '../models/Task';
 import { prioritizeTasks } from '../lib/taskPrioritizer';
+import { DeduplicationService } from '../lib/deduplicationService';
 
 // Create context
 const TaskContext = createContext();
@@ -95,6 +96,38 @@ export const TaskProvider = ({ children }) => {
       return newTask;
     } catch (error) {
       console.error('Error creating task:', error);
+      return null;
+    }
+  };
+
+  // Create a new task with deduplication checking
+  const createTaskWithDeduplication = async (taskData, source = 'manual', sourceId = null) => {
+    if (!userId) return null;
+    
+    try {
+      // Use deduplication service if source and sourceId provided
+      if (source !== 'manual' && sourceId) {
+        const savedTask = await DeduplicationService.createTaskIfUnique(
+          userId,
+          taskData,
+          source,
+          sourceId
+        );
+        
+        if (savedTask) {
+          const newTask = Task.fromDB(savedTask);
+          setTasks(prev => [newTask, ...prev]);
+          return newTask;
+        } else {
+          console.log('Task was identified as duplicate and not created');
+          return null;
+        }
+      } else {
+        // For manual tasks, use regular creation
+        return await createTask(taskData);
+      }
+    } catch (error) {
+      console.error('Error creating task with deduplication:', error);
       return null;
     }
   };
@@ -222,6 +255,27 @@ export const TaskProvider = ({ children }) => {
       ...newFilters
     }));
   };
+
+  // Refresh tasks from database
+  const refreshTasks = async () => {
+    if (!userId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('priority', { ascending: false })
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      const fetchedTasks = (data || []).map(task => Task.fromDB(task));
+      setTasks(fetchedTasks);
+    } catch (error) {
+      console.error('Error refreshing tasks:', error);
+    }
+  };
   
   // Provider value
   const value = {
@@ -229,11 +283,13 @@ export const TaskProvider = ({ children }) => {
     loading,
     filters,
     createTask,
+    createTaskWithDeduplication,
     updateTask,
     completeTask,
     deleteTask,
     reprioritizeTasks,
-    updateFilters
+    updateFilters,
+    refreshTasks
   };
   
   return (

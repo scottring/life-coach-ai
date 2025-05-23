@@ -3,11 +3,10 @@ import { useAuthState } from '../hooks/useAuthState';
 import { FamilyProvider, useFamily } from '../providers/FamilyProvider';
 import DashboardSelector from '../components/DashboardSelector';
 import FamilyMealPlanner from '../components/FamilyMealPlanner';
-import FamilyTasks from '../components/FamilyTasks';
-import FamilyChores from '../components/FamilyChores';
-import FamilyGoals from '../components/FamilyGoals';
-import FamilyMilestones from '../components/FamilyMilestones';
 import FamilyMembers from '../components/FamilyMembers';
+import FamilyGoalsPlanning from '../components/FamilyGoalsPlanning';
+import FamilyWeeklyReview from '../components/FamilyWeeklyReview';
+import FamilyFinances from '../components/FamilyFinances';
 
 function FamilyDashboard() {
   const { user } = useAuthState();
@@ -39,8 +38,15 @@ function FamilyDashboard() {
         setCurrentFamily(families[0]);
       }
     } catch (error) {
-      console.error('Error loading families:', error);
-      setUserFamilies([]);
+      console.warn('Database not configured or families table missing:', error.message);
+      // For now, create a mock family so the demo works
+      const mockFamily = {
+        id: 'demo-family-' + user.id,
+        name: 'Demo Family',
+        userRole: 'admin'
+      };
+      setUserFamilies([mockFamily]);
+      setCurrentFamily(mockFamily);
     } finally {
       setLoadingFamilies(false);
     }
@@ -52,11 +58,10 @@ function FamilyDashboard() {
 
   const tabs = [
     { id: 'overview', name: 'Overview', icon: '🏠' },
+    { id: 'goals-planning', name: 'Goals & Planning', icon: '🎯' },
     { id: 'meals', name: 'Meal Planning', icon: '🍽️' },
-    { id: 'tasks', name: 'Shared Tasks', icon: '📋' },
-    { id: 'chores', name: 'Chores', icon: '🧹' },
-    { id: 'goals', name: 'Family Goals', icon: '🎯' },
-    { id: 'milestones', name: 'Milestones', icon: '🌟' },
+    { id: 'finances', name: 'Finances', icon: '💰' },
+    { id: 'weekly-review', name: 'Weekly Review', icon: '📊' },
     { id: 'members', name: 'Family Members', icon: '👥' }
   ];
 
@@ -152,24 +157,20 @@ function FamilyContent({ activeTab, familyId, userFamilies, loadingFamilies, onF
         <FamilyOverview familyId={familyId} />
       )}
       
+      {activeTab === 'goals-planning' && (
+        <FamilyGoalsPlanning familyId={familyId} />
+      )}
+      
       {activeTab === 'meals' && (
         <FamilyMealPlanner familyId={familyId} />
       )}
       
-      {activeTab === 'tasks' && (
-        <FamilyTasks familyId={familyId} />
+      {activeTab === 'finances' && (
+        <FamilyFinances familyId={familyId} />
       )}
       
-      {activeTab === 'chores' && (
-        <FamilyChores familyId={familyId} />
-      )}
-      
-      {activeTab === 'goals' && (
-        <FamilyGoals familyId={familyId} />
-      )}
-      
-      {activeTab === 'milestones' && (
-        <FamilyMilestones familyId={familyId} />
+      {activeTab === 'weekly-review' && (
+        <FamilyWeeklyReview familyId={familyId} />
       )}
       
       {activeTab === 'members' && (

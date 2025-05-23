@@ -39,8 +39,13 @@ export function useGmailIntegration() {
       const primaryAccount = credentials.find(item => item.credentials?.is_primary) || credentials[0];
       const accessToken = primaryAccount.credentials.access_token;
       
-      // Process emails
-      await processEmails(accessToken);
+      // Process emails with enhanced options
+      await processEmails(accessToken, {
+        includeRead: false,    // Only unread emails from inbox
+        includeSent: true,     // Include sent emails (key for commitments!)
+        maxResults: 25,        // Get more emails per query
+        daysBack: 7           // Look back 7 days
+      });
       
       // Update last sync time
       const now = new Date();

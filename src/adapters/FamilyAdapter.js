@@ -289,5 +289,82 @@ export const FamilyAdapter = {
       .eq('id', itemId);
 
     if (error) throw error;
+  },
+
+  // Hierarchical Goals Methods
+  async getHierarchicalGoals(familyId) {
+    const { data, error } = await supabase
+      .from('family_goal_hierarchy')
+      .select('*')
+      .eq('family_id', familyId)
+      .order('level', { ascending: true });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async createFamilyReview(reviewData) {
+    const { data, error } = await supabase
+      .from('family_reviews')
+      .insert(reviewData)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getFamilyReviews(familyId, limit = 10) {
+    const { data, error } = await supabase
+      .from('family_reviews')
+      .select('*')
+      .eq('family_id', familyId)
+      .order('week_ending', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async updateFamilyReview(reviewId, reviewData) {
+    const { data, error } = await supabase
+      .from('family_reviews')
+      .update(reviewData)
+      .eq('id', reviewId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getGoalProgress(familyId) {
+    const { data, error } = await supabase
+      .from('family_goals')
+      .select(`
+        *,
+        milestones:family_tasks!family_tasks_parent_id_fkey(
+          id,
+          title,
+          status,
+          item_type,
+          projects:family_tasks_projects(
+            id,
+            title,
+            status,
+            item_type,
+            tasks:family_tasks_tasks(
+              id,
+              title,
+              status,
+              item_type
+            )
+          )
+        )
+      `)
+      .eq('family_id', familyId);
+
+    if (error) throw error;
+    return data;
   }
 };

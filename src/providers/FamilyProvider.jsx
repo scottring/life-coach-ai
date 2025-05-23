@@ -78,14 +78,22 @@ export function FamilyProvider({ children }) {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const [meals, tasks, goals, milestones, members, shoppingItems] = await Promise.all([
-        FamilyAdapter.getFamilyMeals(familyId),
-        FamilyAdapter.getFamilyTasks(familyId),
-        FamilyAdapter.getFamilyGoals(familyId),
-        FamilyAdapter.getFamilyMilestones(familyId),
-        FamilyAdapter.getFamilyMembers(familyId),
-        FamilyAdapter.getShoppingItems(familyId)
-      ]);
+      // Try to load data from Supabase, but fallback to empty arrays if database isn't set up yet
+      let meals = [], tasks = [], goals = [], milestones = [], members = [], shoppingItems = [];
+      
+      try {
+        [meals, tasks, goals, milestones, members, shoppingItems] = await Promise.all([
+          FamilyAdapter.getFamilyMeals(familyId),
+          FamilyAdapter.getFamilyTasks(familyId),
+          FamilyAdapter.getFamilyGoals(familyId),
+          FamilyAdapter.getFamilyMilestones(familyId),
+          FamilyAdapter.getFamilyMembers(familyId),
+          FamilyAdapter.getShoppingItems(familyId)
+        ]);
+      } catch (dbError) {
+        console.warn('Database not fully configured, using empty data:', dbError.message);
+        // Use empty arrays as fallback - the components will handle empty state
+      }
 
       dispatch({ type: 'SET_FAMILY_MEALS', payload: meals });
       dispatch({ type: 'SET_FAMILY_TASKS', payload: tasks });
@@ -106,7 +114,8 @@ export function FamilyProvider({ children }) {
       dispatch({ type: 'ADD_FAMILY_MEAL', payload: newMeal });
       return newMeal;
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error.message });
+      console.warn('Database operation failed:', error.message);
+      dispatch({ type: 'SET_ERROR', payload: 'Database not configured. Please set up Supabase connection.' });
       throw error;
     }
   };
@@ -195,7 +204,8 @@ export function FamilyProvider({ children }) {
       dispatch({ type: 'SET_FAMILY_GOALS', payload: [...state.familyGoals, newGoal] });
       return newGoal;
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error.message });
+      console.warn('Database operation failed:', error.message);
+      dispatch({ type: 'SET_ERROR', payload: 'Database not configured. Please set up Supabase connection.' });
       throw error;
     }
   };

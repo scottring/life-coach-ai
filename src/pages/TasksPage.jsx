@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import TaskDetail from '../components/TaskDetail';
 import TaskCreator from '../components/TaskCreator';
+import DuplicateTaskManager from '../components/DuplicateTaskManager';
 import { useTasks } from '../providers/TaskProvider';
 import { useAuthState } from '../hooks/useAuthState';
 
 function TasksPage() {
-  const { tasks: allTasks, updateTask, completeTask, reprioritizeTasks } = useTasks();
+  const { tasks: allTasks, updateTask, completeTask, deleteTask, reprioritizeTasks, refreshTasks } = useTasks();
   const { user } = useAuthState();
   
   const [activeFilter, setActiveFilter] = useState('pending');
@@ -14,6 +15,7 @@ function TasksPage() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [reprioritizing, setReprioritizing] = useState(false);
+  const [deletingTaskId, setDeletingTaskId] = useState(null);
   
   // Filter tasks based on current filters
   const filteredTasks = allTasks.filter(task => {
@@ -43,6 +45,22 @@ function TasksPage() {
   
   const handleTaskUpdate = async (updatedTask) => {
     await updateTask(updatedTask.id, updatedTask);
+  };
+
+  const handleDeleteTask = async (taskId, e) => {
+    e.stopPropagation(); // Prevent task detail modal from opening
+    
+    if (window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
+      setDeletingTaskId(taskId);
+      try {
+        await deleteTask(taskId);
+      } catch (error) {
+        console.error('Error deleting task:', error);
+        alert('Failed to delete task. Please try again.');
+      } finally {
+        setDeletingTaskId(null);
+      }
+    }
   };
   
   const handleReprioritize = async () => {
@@ -128,6 +146,13 @@ function TasksPage() {
               </div>
             </div>
           </div>
+
+          {/* Duplicate Task Manager */}
+          <DuplicateTaskManager 
+            tasks={allTasks} 
+            userId={user?.id}
+            onTasksChanged={refreshTasks}
+          />
         
         {filteredTasks.length === 0 ? (
           <div className="flex h-64 items-center justify-center">
@@ -186,6 +211,23 @@ function TasksPage() {
                         className={`h-2 w-2 rounded-full ${getPriorityColor(task.priority)}`} 
                         title={`Priority: ${task.priority}`}
                       ></div>
+
+                      <button
+                        onClick={(e) => handleDeleteTask(task.id, e)}
+                        disabled={deletingTaskId === task.id}
+                        className="ml-2 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete task"
+                      >
+                        {deletingTaskId === task.id ? (
+                          <svg className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        ) : (
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>

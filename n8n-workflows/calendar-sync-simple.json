@@ -1,0 +1,133 @@
+{
+  "name": "Simple Calendar Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{$now.toISO()}}",
+          "timeMax": "={{$now.plus(30, 'days').toISO()}}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "get-calendar-events",
+      "name": "Get Calendar Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "personal-calendar",
+          "name": "Google Calendar OAuth2 API - Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Convert calendar events to tasks\nconst items = $input.all();\nconst tasks = [];\n\nitems.forEach(item => {\n  const event = item.json;\n  \n  // Skip all-day events for now\n  if (event.start.date && !event.start.dateTime) {\n    return;\n  }\n  \n  // Extract event details\n  const startTime = new Date(event.start.dateTime || event.start.date);\n  const endTime = new Date(event.end.dateTime || event.end.date);\n  const duration = (endTime - startTime) / (1000 * 60); // minutes\n  \n  // Determine context based on calendar or event details\n  let context = 'Personal';\n  const summary = (event.summary || '').toLowerCase();\n  if (summary.includes('work') || summary.includes('meeting') || \n      event.organizer?.email?.includes('mobileaccord.com')) {\n    context = 'Work';\n  }\n  \n  // Create task object\n  tasks.push({\n    json: {\n      title: event.summary || 'Untitled Event',\n      description: event.description || '',\n      deadline: event.start.dateTime || event.start.date,\n      context: context,\n      priority: 3, // Default priority\n      calendar_event_id: event.id,\n      location: event.location || '',\n      attendees: event.attendees?.map(a => a.email) || [],\n      duration_minutes: duration,\n      event_type: 'calendar',\n      source: 'google_calendar'\n    }\n  });\n});\n\nreturn tasks;"
+      },
+      "id": "convert-to-tasks",
+      "name": "Convert to Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://life-coach-ai-drab.vercel.app/api/n8n/calendar-sync",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "my-secret-key-2024"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "events",
+              "value": "={{$input.all().map(item => item.json)}}"
+            },
+            {
+              "name": "syncedAt",
+              "value": "={{new Date().toISOString()}}"
+            }
+          ]
+        }
+      },
+      "id": "send-to-app",
+      "name": "Send to Life Coach AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Get Calendar Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Calendar Events": {
+      "main": [
+        [
+          {
+            "node": "Convert to Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to Tasks": {
+      "main": [
+        [
+          {
+            "node": "Send to Life Coach AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "tags": ["sync", "calendar"]
+}

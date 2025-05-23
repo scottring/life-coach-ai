@@ -8,6 +8,7 @@ import Login from './components/Login';
 import Header from './components/Header';
 import ContextBar from './components/ContextBar';
 import AIAssistant from './components/AIAssistant';
+import MobileNav from './components/MobileNav';
 
 // Pages
 import DashboardPage from './pages/DashboardPage';
@@ -17,6 +18,7 @@ import GoalsPage from './pages/GoalsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import TestPage from './pages/TestPage';
+import DailyItinerary from './components/DailyItinerary';
 
 // Providers
 import { TaskProvider } from './providers/TaskProvider';
@@ -61,9 +63,10 @@ function App() {
               <div className="min-h-screen bg-gray-50">
                 <Header />
                 <ContextBar />
-                <main className="pb-12">
+                <main className="pb-12 lg:pb-0">
                   <Routes>
-                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/" element={<DailyItinerary />} />
+                    <Route path="/today" element={<DailyItinerary />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/dashboard/family" element={<FamilyDashboard />} />
                     <Route path="/dashboard/work" element={<DashboardPage />} />
@@ -73,6 +76,9 @@ function App() {
                     <Route path="/settings" element={<SettingsPage />} />
                   </Routes>
                 </main>
+                
+                {/* Mobile Navigation */}
+                <MobileNav />
                 
                 {/* Global AI Assistant */}
                 {!isAssistantOpen && (

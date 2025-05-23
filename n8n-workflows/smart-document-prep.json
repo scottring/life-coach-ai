@@ -1,0 +1,341 @@
+{
+  "name": "Smart Document Preparation",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://life-coach-ai-drab.vercel.app/api/n8n/upcoming-tasks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Webhook-Secret",
+              "value": "my-secret-key-2024"
+            }
+          ]
+        }
+      },
+      "id": "fetch-upcoming-tasks",
+      "name": "Fetch Upcoming Tasks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Filter tasks that need document preparation\nconst items = $input.all();\nconst tasksNeedingPrep = [];\n\nitems.forEach(item => {\n  const task = item.json;\n  if (!task.deadline) return;\n  \n  const taskTime = new Date(task.deadline);\n  const now = new Date();\n  const hoursUntilTask = (taskTime - now) / (1000 * 60 * 60);\n  \n  // Prepare documents 2-4 hours before task\n  if (hoursUntilTask >= 2 && hoursUntilTask <= 4) {\n    // Detect task type\n    const text = `${task.title} ${task.description || ''}`.toLowerCase();\n    let taskType = 'general';\n    let prepTime = 2;\n    \n    if (text.includes('flight') || text.includes('airport')) {\n      taskType = 'flight';\n      prepTime = 3; // Earlier for flights\n    } else if (text.includes('meeting') || text.includes('call')) {\n      taskType = 'meeting';\n      prepTime = 2;\n    } else if (text.includes('doctor') || text.includes('medical')) {\n      taskType = 'medical';\n      prepTime = 2;\n    }\n    \n    tasksNeedingPrep.push({\n      json: {\n        ...task,\n        taskType,\n        prepTime,\n        hoursUntilTask\n      }\n    });\n  }\n});\n\nreturn tasksNeedingPrep;"
+      },
+      "id": "filter-tasks-needing-prep",
+      "name": "Filter Tasks Needing Prep",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "json",
+        "options": {}
+      },
+      "id": "split-tasks",
+      "name": "Split Tasks",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const task = $input.first().json;\nconst documents = [];\n\n// Prepare flight-specific documents\nif (task.taskType === 'flight') {\n  // Extract flight details\n  const flightPattern = /([A-Z]{2}\\d{1,4})/;\n  const match = task.title.match(flightPattern);\n  \n  documents.push({\n    type: 'flight_info',\n    title: 'Flight Information',\n    icon: '✈️',\n    data: {\n      flightNumber: match ? match[1] : 'Unknown',\n      status: 'Check airline website',\n      gate: 'TBD',\n      terminal: 'TBD'\n    }\n  });\n  \n  documents.push({\n    type: 'checklist',\n    title: 'Pre-Flight Checklist',\n    icon: '📋',\n    items: [\n      'Check-in online',\n      'Print/download boarding pass',\n      'Check passport expiry',\n      'Pack carry-on liquids',\n      'Charge devices',\n      'Download offline maps'\n    ]\n  });\n}\n\n// Prepare meeting documents\nif (task.taskType === 'meeting') {\n  documents.push({\n    type: 'agenda',\n    title: 'Meeting Preparation',\n    icon: '📄',\n    items: [\n      'Review previous meeting notes',\n      'Prepare questions',\n      'Test video/audio setup',\n      'Share screen permissions'\n    ]\n  });\n}\n\n// Medical appointment prep\nif (task.taskType === 'medical') {\n  documents.push({\n    type: 'medical_prep',\n    title: 'Appointment Checklist',\n    icon: '🏥',\n    items: [\n      'Insurance card',\n      'List of current medications',\n      'Recent test results',\n      'Questions for doctor',\n      'Payment method'\n    ]\n  });\n}\n\nreturn [{\n  json: {\n    taskId: task.id,\n    taskTitle: task.title,\n    taskType: task.taskType,\n    deadline: task.deadline,\n    documents: documents\n  }\n}];"
+      },
+      "id": "prepare-documents",
+      "name": "Prepare Documents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.taskType}}",
+              "operation": "equals",
+              "value2": "flight"
+            }
+          ]
+        }
+      },
+      "id": "if-flight",
+      "name": "IF Flight",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.aviationstack.com/v1/flights",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_key",
+              "value": "YOUR_API_KEY"
+            },
+            {
+              "name": "flight_iata",
+              "value": "={{$json.documents[0].data.flightNumber}}"
+            }
+          ]
+        }
+      },
+      "id": "fetch-flight-status",
+      "name": "Fetch Flight Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1450, 100],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.weatherapi.com/v1/forecast.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_API_KEY"
+            },
+            {
+              "name": "q",
+              "value": "={{$json.destination || 'New York'}}"
+            },
+            {
+              "name": "days",
+              "value": "3"
+            }
+          ]
+        }
+      },
+      "id": "fetch-weather",
+      "name": "Fetch Weather",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1450, 250],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Merge all document data\nconst items = $input.all();\nconst taskData = items[0].json;\n\n// Add flight status if available\nif (items[1]?.json?.data) {\n  const flightData = items[1].json.data[0];\n  taskData.documents[0].data = {\n    ...taskData.documents[0].data,\n    status: flightData.flight_status || 'Unknown',\n    departure: flightData.departure.iata,\n    arrival: flightData.arrival.iata,\n    gate: flightData.departure.gate || 'TBD'\n  };\n}\n\n// Add weather data if available\nif (items[2]?.json?.forecast) {\n  const weather = items[2].json.forecast.forecastday[0];\n  taskData.documents.push({\n    type: 'weather',\n    title: 'Destination Weather',\n    icon: '🌤️',\n    data: {\n      condition: weather.day.condition.text,\n      temp: `${weather.day.avgtemp_f}°F`,\n      rain: weather.day.daily_chance_of_rain + '%'\n    }\n  });\n}\n\nreturn [{ json: taskData }];"
+      },
+      "id": "merge-flight-data",
+      "name": "Merge Flight Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://life-coach-ai-drab.vercel.app/api/n8n/prepared-documents",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "my-secret-key-2024"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "taskId",
+              "value": "={{$json.taskId}}"
+            },
+            {
+              "name": "documents",
+              "value": "={{$json.documents}}"
+            },
+            {
+              "name": "preparedAt",
+              "value": "={{new Date().toISOString()}}"
+            }
+          ]
+        }
+      },
+      "id": "send-prepared-docs",
+      "name": "Send Prepared Documents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "service": "gmail",
+        "message": "=Your documents are ready for: {{$json.taskTitle}}\n\nWe've prepared the following for you:\n{{$json.documents.map(d => '- ' + d.icon + ' ' + d.title).join('\\n')}}\n\nView in Life Coach AI: https://life-coach-ai-drab.vercel.app/today",
+        "subject": "=📋 Documents Ready: {{$json.taskTitle}}",
+        "toList": "user@example.com"
+      },
+      "id": "send-notification-email",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [2050, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-oauth",
+          "name": "Gmail OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Fetch Upcoming Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Upcoming Tasks": {
+      "main": [
+        [
+          {
+            "node": "Filter Tasks Needing Prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Tasks Needing Prep": {
+      "main": [
+        [
+          {
+            "node": "Split Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Tasks": {
+      "main": [
+        [
+          {
+            "node": "Prepare Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Documents": {
+      "main": [
+        [
+          {
+            "node": "IF Flight",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Flight": {
+      "main": [
+        [
+          {
+            "node": "Fetch Flight Status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Weather",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Prepared Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Flight Status": {
+      "main": [
+        [
+          {
+            "node": "Merge Flight Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Weather": {
+      "main": [
+        [
+          {
+            "node": "Merge Flight Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Flight Data": {
+      "main": [
+        [
+          {
+            "node": "Send Prepared Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Prepared Documents": {
+      "main": [
+        [
+          {
+            "node": "Send Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "tags": ["automation", "documents"]
+}

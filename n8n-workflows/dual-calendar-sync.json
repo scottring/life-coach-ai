@@ -1,0 +1,238 @@
+{
+  "name": "Dual Calendar Sync (Work + Personal)",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "every30Minutes"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 100,
+        "options": {
+          "timeMin": "={{$now.minus(7, 'days').toISO()}}",
+          "timeMax": "={{$now.plus(60, 'days').toISO()}}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "get-personal-calendar",
+      "name": "Get Personal Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 200],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "personal-calendar",
+          "name": "Google Calendar - Personal (smkaufman@gmail.com)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 100,
+        "options": {
+          "timeMin": "={{$now.minus(7, 'days').toISO()}}",
+          "timeMax": "={{$now.plus(60, 'days').toISO()}}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "get-work-calendar",
+      "name": "Get Work Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 400],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "work-calendar",
+          "name": "Google Calendar - Work (scott@mobileaccord.com)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Process personal calendar events\nconst items = $input.all();\nconst events = [];\n\nitems.forEach(item => {\n  const event = item.json;\n  \n  events.push({\n    json: {\n      google_event_id: event.id,\n      calendar_id: 'personal-primary',\n      calendar_type: 'personal',\n      title: event.summary || 'Untitled Event',\n      description: event.description || null,\n      location: event.location || null,\n      start_time: event.start.dateTime || event.start.date,\n      end_time: event.end.dateTime || event.end.date,\n      all_day: !event.start.dateTime,\n      timezone: event.start.timeZone || 'America/New_York',\n      organizer_email: event.organizer?.email || null,\n      attendees: event.attendees || [],\n      status: event.status || 'confirmed',\n      visibility: event.visibility || 'default',\n      raw_data: event\n    }\n  });\n});\n\nreturn events;"
+      },
+      "id": "process-personal-events",
+      "name": "Process Personal Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Process work calendar events\nconst items = $input.all();\nconst events = [];\n\nitems.forEach(item => {\n  const event = item.json;\n  \n  events.push({\n    json: {\n      google_event_id: event.id,\n      calendar_id: 'work-primary',\n      calendar_type: 'work',\n      title: event.summary || 'Untitled Event',\n      description: event.description || null,\n      location: event.location || null,\n      start_time: event.start.dateTime || event.start.date,\n      end_time: event.end.dateTime || event.end.date,\n      all_day: !event.start.dateTime,\n      timezone: event.start.timeZone || 'America/New_York',\n      organizer_email: event.organizer?.email || null,\n      attendees: event.attendees || [],\n      status: event.status || 'confirmed',\n      visibility: event.visibility || 'default',\n      raw_data: event\n    }\n  });\n});\n\nreturn events;"
+      },
+      "id": "process-work-events",
+      "name": "Process Work Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {},
+      "id": "merge-calendars",
+      "name": "Merge Calendars",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Apply basic learning/pattern detection\nconst items = $input.all();\nconst processedEvents = [];\n\nitems.forEach(item => {\n  const event = item.json;\n  const titleLower = event.title.toLowerCase();\n  const descLower = (event.description || '').toLowerCase();\n  \n  // Detect event type based on patterns\n  let eventType = 'general';\n  let importance = 3;\n  let preparationTime = 15;\n  \n  // Flight detection\n  if (titleLower.includes('flight') || titleLower.match(/[A-Z]{2}\\d{1,4}/) || \n      titleLower.includes('✈️') || descLower.includes('airport')) {\n    eventType = 'flight';\n    importance = 5;\n    preparationTime = 120; // 2 hours\n  }\n  // Meeting detection\n  else if (titleLower.includes('meeting') || titleLower.includes('1:1') || \n           titleLower.includes('standup') || titleLower.includes('sync')) {\n    eventType = 'meeting';\n    importance = event.calendar_type === 'work' ? 4 : 3;\n    preparationTime = 15;\n  }\n  // Medical appointments\n  else if (titleLower.includes('doctor') || titleLower.includes('dentist') || \n           titleLower.includes('vet') || titleLower.includes('appointment')) {\n    eventType = 'medical';\n    importance = 5;\n    preparationTime = 30;\n  }\n  // Social events\n  else if (titleLower.includes('dinner') || titleLower.includes('lunch') || \n           titleLower.includes('party') || titleLower.includes('birthday')) {\n    eventType = 'social';\n    importance = 2;\n    preparationTime = 30;\n  }\n  // Work-specific patterns\n  else if (event.calendar_type === 'work') {\n    if (titleLower.includes('interview')) {\n      eventType = 'interview';\n      importance = 5;\n      preparationTime = 60;\n    } else if (titleLower.includes('presentation') || titleLower.includes('demo')) {\n      eventType = 'presentation';\n      importance = 5;\n      preparationTime = 120;\n    }\n  }\n  \n  processedEvents.push({\n    json: {\n      ...event,\n      event_type: eventType,\n      importance_score: importance,\n      preparation_time: preparationTime,\n      patterns: {\n        detected_type: eventType,\n        confidence: 0.8,\n        keywords_found: []\n      }\n    }\n  });\n});\n\nreturn processedEvents;"
+      },
+      "id": "apply-pattern-detection",
+      "name": "Apply Pattern Detection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://life-coach-ai-drab.vercel.app/api/n8n/calendar-events-sync",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "my-secret-key-2024"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "events",
+              "value": "={{$input.all().map(item => item.json)}}"
+            },
+            {
+              "name": "syncedAt",
+              "value": "={{new Date().toISOString()}}"
+            }
+          ]
+        }
+      },
+      "id": "send-to-life-coach",
+      "name": "Send to Life Coach AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Personal Calendar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Work Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Personal Calendar": {
+      "main": [
+        [
+          {
+            "node": "Process Personal Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Work Calendar": {
+      "main": [
+        [
+          {
+            "node": "Process Work Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Personal Events": {
+      "main": [
+        [
+          {
+            "node": "Merge Calendars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Work Events": {
+      "main": [
+        [
+          {
+            "node": "Merge Calendars",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Calendars": {
+      "main": [
+        [
+          {
+            "node": "Apply Pattern Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Pattern Detection": {
+      "main": [
+        [
+          {
+            "node": "Send to Life Coach AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "tags": ["sync", "calendar", "learning"]
+}

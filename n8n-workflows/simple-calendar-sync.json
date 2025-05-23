@@ -1,0 +1,216 @@
+{
+  "name": "Simple Calendar Sync (Work + Personal)",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 100,
+        "options": {
+          "timeMin": "={{$now.minus(7, 'days').toISO()}}",
+          "timeMax": "={{$now.plus(30, 'days').toISO()}}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "get-personal-calendar",
+      "name": "Get Personal Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 200],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "personal-calendar",
+          "name": "Google Calendar - Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 100,
+        "options": {
+          "timeMin": "={{$now.minus(7, 'days').toISO()}}",
+          "timeMax": "={{$now.plus(30, 'days').toISO()}}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "get-work-calendar",
+      "name": "Get Work Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 400],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "work-calendar",
+          "name": "Google Calendar - Work"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Process personal calendar events\nconst items = $input.all();\nconst events = [];\n\nitems.forEach(item => {\n  const event = item.json;\n  \n  events.push({\n    json: {\n      google_event_id: event.id,\n      calendar_id: 'personal-primary',\n      calendar_type: 'personal',\n      title: event.summary || 'Untitled Event',\n      description: event.description || null,\n      location: event.location || null,\n      start_time: event.start.dateTime || event.start.date,\n      end_time: event.end.dateTime || event.end.date,\n      all_day: !event.start.dateTime,\n      timezone: event.start.timeZone || 'America/New_York',\n      organizer_email: event.organizer?.email || null,\n      attendees: event.attendees || [],\n      status: event.status || 'confirmed',\n      raw_data: event\n    }\n  });\n});\n\nreturn events;"
+      },
+      "id": "process-personal-events",
+      "name": "Process Personal Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Process work calendar events\nconst items = $input.all();\nconst events = [];\n\nitems.forEach(item => {\n  const event = item.json;\n  \n  events.push({\n    json: {\n      google_event_id: event.id,\n      calendar_id: 'work-primary',\n      calendar_type: 'work',\n      title: event.summary || 'Untitled Event',\n      description: event.description || null,\n      location: event.location || null,\n      start_time: event.start.dateTime || event.start.date,\n      end_time: event.end.dateTime || event.end.date,\n      all_day: !event.start.dateTime,\n      timezone: event.start.timeZone || 'America/New_York',\n      organizer_email: event.organizer?.email || null,\n      attendees: event.attendees || [],\n      status: event.status || 'confirmed',\n      raw_data: event\n    }\n  });\n});\n\nreturn events;"
+      },
+      "id": "process-work-events",
+      "name": "Process Work Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {},
+      "id": "merge-calendars",
+      "name": "Merge Calendars",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://life-coach-ai-drab.vercel.app/api/n8n/calendar-events-sync",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "my-secret-key-2024"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "events",
+              "value": "={{$input.all().map(item => item.json)}}"
+            },
+            {
+              "name": "syncedAt",
+              "value": "={{new Date().toISOString()}}"
+            }
+          ]
+        }
+      },
+      "id": "send-to-life-coach",
+      "name": "Send to Life Coach AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Get Personal Calendar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Work Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Personal Calendar": {
+      "main": [
+        [
+          {
+            "node": "Process Personal Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Work Calendar": {
+      "main": [
+        [
+          {
+            "node": "Process Work Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Personal Events": {
+      "main": [
+        [
+          {
+            "node": "Merge Calendars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Work Events": {
+      "main": [
+        [
+          {
+            "node": "Merge Calendars",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Calendars": {
+      "main": [
+        [
+          {
+            "node": "Send to Life Coach AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "tags": ["sync", "calendar"]
+}

@@ -163,14 +163,22 @@ export const FamilyAdapter = {
   },
 
   async getFamilyGoals(familyId) {
-    const { data, error } = await supabase
-      .from('family_goals')
-      .select('*')
-      .eq('family_id', familyId)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('family_goals')
+        .select('*')
+        .eq('family_id', familyId)
+        .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching family goals:', error);
+      if (error.message?.includes('relation "family_goals" does not exist')) {
+        throw new Error('Database not configured. Please set up Supabase connection.');
+      }
+      throw error;
+    }
   },
 
   async createFamilyGoal(goalData) {

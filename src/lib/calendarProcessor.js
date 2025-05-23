@@ -165,15 +165,18 @@ export async function extractTasksFromEvents(events) {
       - "related_event_id": ID of the related calendar event
       
       If no tasks are needed for an event, don't include it.
-      Return the results as a JSON array of objects with the exact field names above.
+      
+      IMPORTANT: Return ONLY a JSON array, starting with [ and ending with ]. Do not include any explanatory text before or after the JSON.
+      If there are no tasks to extract, return an empty array: []
     `;
     
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
-        {role: "system", content: "You extract preparation tasks from calendar events."},
+        {role: "system", content: "You are a task extraction assistant. You MUST respond with valid JSON arrays only. Never include explanatory text outside the JSON structure."},
         {role: "user", content: prompt}
-      ]
+      ],
+      temperature: 0.1 // Lower temperature for more consistent JSON output
     });
     
     const content = completion.choices[0].message.content;
@@ -182,11 +185,22 @@ export async function extractTasksFromEvents(events) {
     let tasks = [];
     
     try {
-      tasks = JSON.parse(content);
+      // First try to parse the entire response as JSON
+      const parsed = JSON.parse(content);
+      
+      // Handle both array response and object with 'tasks' property
+      if (Array.isArray(parsed)) {
+        tasks = parsed;
+      } else if (parsed.tasks && Array.isArray(parsed.tasks)) {
+        tasks = parsed.tasks;
+      } else {
+        console.warn('Unexpected JSON structure:', parsed);
+        tasks = [];
+      }
     } catch (e) {
       console.error('Failed to parse OpenAI response as JSON:', e);
-      // Attempt to extract JSON from the text response
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      // Attempt to extract JSON array from the text response
+      const jsonMatch = content.match(/\[[\s\S]*?\]/);
       if (jsonMatch) {
         try {
           tasks = JSON.parse(jsonMatch[0]);

@@ -2,6 +2,7 @@
 export class Task {
   constructor(data = {}) {
     this.id = data.id || null;
+    this.user_id = data.user_id || null;
     this.title = data.title || '';
     this.description = data.description || '';
     this.deadline = data.deadline || null;
@@ -23,8 +24,8 @@ export class Task {
 
   // Prepare for database insertion
   toDB() {
-    return {
-      id: this.id,
+    const data = {
+      user_id: this.user_id,
       title: this.title,
       description: this.description,
       deadline: this.deadline,
@@ -38,6 +39,13 @@ export class Task {
       priority_reason: this.priority_reason,
       scheduling_note: this.scheduling_note
     };
+    
+    // Only include id if it exists (for updates)
+    if (this.id) {
+      data.id = this.id;
+    }
+    
+    return data;
   }
 
   // Check if task is overdue

@@ -2,6 +2,7 @@
 export class Goal {
   constructor(data = {}) {
     this.id = data.id || null;
+    this.user_id = data.user_id || null;
     this.title = data.title || '';
     this.description = data.description || '';
     this.timeframe = data.timeframe || 'quarter';
@@ -19,8 +20,8 @@ export class Goal {
 
   // Prepare for database insertion
   toDB() {
-    return {
-      id: this.id,
+    const data = {
+      user_id: this.user_id,
       title: this.title,
       description: this.description,
       timeframe: this.timeframe,
@@ -28,6 +29,13 @@ export class Goal {
       created_at: this.created_at,
       updated_at: new Date().toISOString()
     };
+    
+    // Only include id if it exists (for updates)
+    if (this.id) {
+      data.id = this.id;
+    }
+    
+    return data;
   }
 
   // Calculate progress based on associated tasks

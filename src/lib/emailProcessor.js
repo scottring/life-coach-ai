@@ -39,6 +39,9 @@ export async function processEmails(accessToken, options = {}) {
       
       if (!response.ok) {
         console.warn(`Failed to fetch emails for query "${query}": ${response.status}`);
+        if (response.status === 403) {
+          throw new Error('Gmail API access denied (403 Forbidden). Please reconnect your Gmail account.');
+        }
         continue;
       }
       
@@ -98,6 +101,9 @@ async function fetchEmailDetails(accessToken, messageId) {
     });
     
     if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error('Gmail API access denied (403 Forbidden). Please reconnect your Gmail account.');
+      }
       throw new Error(`Failed to fetch email details: ${response.status}`);
     }
     

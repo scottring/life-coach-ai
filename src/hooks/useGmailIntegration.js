@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuthState } from './useAuthState';
 import { processEmails } from '../lib/emailProcessor';
+import { checkGmailApiStatus } from '../lib/gmailApiChecker';
 
 export function useGmailIntegration() {
   const { user } = useAuthState();
@@ -39,13 +40,41 @@ export function useGmailIntegration() {
       const primaryAccount = credentials.find(item => item.credentials?.is_primary) || credentials[0];
       const accessToken = primaryAccount.credentials.access_token;
       
+      console.log('Gmail sync - Using account:', {
+        email: primaryAccount.credentials.account_email,
+        hasToken: !!accessToken,
+        tokenLength: accessToken?.length,
+        expiresAt: primaryAccount.credentials.expires_at
+      });
+      
+      // First check if Gmail API is enabled
+      const apiStatus = await checkGmailApiStatus(accessToken);
+      if (!apiStatus.enabled) {
+        console.error('Gmail API check failed:', apiStatus);
+        setError(`${apiStatus.error}\n\n${apiStatus.action}`);
+        setSyncing(false);
+        return;
+      }
+      
+      console.log('Gmail API is enabled for:', apiStatus.emailAddress);
+      
+      // Check if token might be expired
+      const expiresAt = primaryAccount.credentials.expires_at;
+      if (expiresAt && new Date(expiresAt) <= new Date()) {
+        setError('Gmail authentication expired. Please reconnect your Gmail account.');
+        setSyncing(false);
+        return;
+      }
+      
       // Process emails with enhanced options
-      await processEmails(accessToken, {
+      const extractedTasks = await processEmails(accessToken, {
         includeRead: false,    // Only unread emails from inbox
         includeSent: true,     // Include sent emails (key for commitments!)
         maxResults: 25,        // Get more emails per query
         daysBack: 7           // Look back 7 days
       });
+      
+      console.log(`Email sync completed. Extracted ${extractedTasks?.length || 0} tasks.`);
       
       // Update last sync time
       const now = new Date();
@@ -61,7 +90,12 @@ export function useGmailIntegration() {
         
     } catch (err) {
       console.error('Error syncing emails:', err);
-      setError('Failed to sync emails: ' + (err.message || 'Unknown error'));
+      // Check if it's a 403 error (authentication issue)
+      if (err.message?.includes('403') || err.message?.includes('Forbidden')) {
+        setError('Gmail access denied. This usually means:\n1. The Gmail API is not enabled in Google Cloud Console\n2. The access token has expired\n3. Missing proper scopes\n\nPlease reconnect your Gmail account.');
+      } else {
+        setError('Failed to sync emails: ' + (err.message || 'Unknown error'));
+      }
     } finally {
       setSyncing(false);
     }
@@ -98,5 +132,5 @@ export function useGmailIntegration() {
     }
   }, [user?.id]);
   
-  return { syncing, lastSync, error, syncEmails };
+  return { syncing, lastSync, error, syncEmails, clearError: () => setError(null) };
 }

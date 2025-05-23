@@ -13,7 +13,7 @@ function IntegrationsManager() {
   });
   
   const [loading, setLoading] = useState(true);
-  const { syncing: syncingGmail, lastSync: lastGmailSync, syncEmails } = useGmailIntegration();
+  const { syncing: syncingGmail, lastSync: lastGmailSync, syncEmails, error: gmailError } = useGmailIntegration();
   const { loading: loadingCalendar, lastSync: lastCalendarSync, fetchEvents } = useCalendarIntegration();
 
   useEffect(() => {
@@ -219,6 +219,22 @@ function IntegrationsManager() {
               </button>
             </div>
           </div>
+          
+          {/* Error Message */}
+          {gmailError && (
+            <div className="mt-3 rounded-md bg-red-50 p-3">
+              <p className="text-sm text-red-600 whitespace-pre-line">{gmailError}</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-red-500 font-semibold">Quick Fix:</p>
+                <ol className="text-xs text-red-500 list-decimal list-inside space-y-1">
+                  <li>Go to <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener noreferrer" className="underline">Google Cloud Console</a></li>
+                  <li>Enable the Gmail API</li>
+                  <li>Wait 2-3 minutes</li>
+                  <li>Remove and re-add your Gmail account below</li>
+                </ol>
+              </div>
+            </div>
+          )}
           
           {/* Connected Accounts */}
           {integrations.gmail.accounts.length > 0 && (

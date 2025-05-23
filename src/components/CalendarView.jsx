@@ -20,6 +20,8 @@ function CalendarView() {
       const start = startOfWeek(currentDate, { weekStartsOn: 1 });
       const end = endOfWeek(currentDate, { weekStartsOn: 1 });
       
+      console.log('Fetching events for week:', start.toDateString(), 'to', end.toDateString());
+      
       const { data, error } = await supabase
         .from('calendar_events')
         .select('*')
@@ -28,6 +30,8 @@ function CalendarView() {
         .order('start_time', { ascending: true });
       
       if (error) throw error;
+      
+      console.log('Found events for this week:', data?.length || 0);
       setCalendarEvents(data || []);
     } catch (error) {
       console.error('Error fetching calendar events:', error);

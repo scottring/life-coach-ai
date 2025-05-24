@@ -10,6 +10,12 @@ function TravelDashboard() {
   const [upcomingTrips, setUpcomingTrips] = useState([]);
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [showNewTripForm, setShowNewTripForm] = useState(false);
+  const [newTripData, setNewTripData] = useState({
+    destination: '',
+    startDate: '',
+    endDate: '',
+    notes: ''
+  });
   const [loading, setLoading] = useState(true);
 
   // Fetch trips from calendar events with travel keywords
@@ -317,6 +323,141 @@ function TravelDashboard() {
                 <li>✓ Medication and first aid supplies</li>
                 <li>✓ Stroller/carrier arrangements</li>
               </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Trip Form Modal */}
+      {showNewTripForm && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={() => setShowNewTripForm(false)}></div>
+            </div>
+
+            <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Plan New Trip</h3>
+                
+                <form className="space-y-4" onSubmit={async (e) => {
+                  e.preventDefault();
+                  
+                  // Create a calendar event for the trip
+                  try {
+                    const { error } = await supabase
+                      .from('calendar_events')
+                      .insert({
+                        title: `Trip to ${newTripData.destination}`,
+                        description: newTripData.notes,
+                        start_time: new Date(newTripData.startDate).toISOString(),
+                        end_time: new Date(newTripData.endDate).toISOString(),
+                        location: newTripData.destination,
+                        event_type: 'flight',
+                        google_event_id: `trip-${Date.now()}`,
+                        calendar_id: 'local-calendar',
+                        calendar_type: 'personal',
+                        status: 'confirmed',
+                        attendees: [],
+                        all_day: true,
+                        timezone: 'America/New_York'
+                      });
+
+                    if (error) throw error;
+
+                    // Generate travel tasks
+                    await generateTravelTasks({
+                      destination: newTripData.destination,
+                      startDate: new Date(newTripData.startDate),
+                      endDate: new Date(newTripData.endDate)
+                    });
+
+                    // Reset form and close
+                    setNewTripData({ destination: '', startDate: '', endDate: '', notes: '' });
+                    setShowNewTripForm(false);
+                    
+                    // Refresh trips
+                    fetchUpcomingTrips();
+                  } catch (error) {
+                    console.error('Error creating trip:', error);
+                    alert('Failed to create trip. Please try again.');
+                  }
+                }}>
+                  <div>
+                    <label htmlFor="destination" className="block text-sm font-medium text-gray-700">
+                      Destination
+                    </label>
+                    <input
+                      type="text"
+                      id="destination"
+                      value={newTripData.destination}
+                      onChange={(e) => setNewTripData({ ...newTripData, destination: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        id="startDate"
+                        value={newTripData.startDate}
+                        onChange={(e) => setNewTripData({ ...newTripData, startDate: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        id="endDate"
+                        value={newTripData.endDate}
+                        onChange={(e) => setNewTripData({ ...newTripData, endDate: e.target.value })}
+                        min={newTripData.startDate}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+                      Notes (optional)
+                    </label>
+                    <textarea
+                      id="notes"
+                      rows={3}
+                      value={newTripData.notes}
+                      onChange={(e) => setNewTripData({ ...newTripData, notes: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    />
+                  </div>
+
+                  <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                    <button
+                      type="submit"
+                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+                    >
+                      Create Trip
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewTripForm(false)}
+                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         </div>

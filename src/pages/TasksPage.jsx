@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import TaskDetail from '../components/TaskDetail';
 import TaskCreator from '../components/TaskCreator';
 import DuplicateTaskManager from '../components/DuplicateTaskManager';
+import QuickTaskEntry from '../components/QuickTaskEntry';
 import { useTasks } from '../providers/TaskProvider';
 import { useAuthState } from '../hooks/useAuthState';
 
@@ -16,6 +17,7 @@ function TasksPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [reprioritizing, setReprioritizing] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState(null);
+  const [showQuickEntry, setShowQuickEntry] = useState(false);
   
   // Filter tasks based on current filters
   const filteredTasks = allTasks.filter(task => {
@@ -81,19 +83,47 @@ function TasksPage() {
       setReprioritizing(false);
     }
   };
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Cmd/Ctrl + K to open quick entry
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowQuickEntry(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex flex-col justify-between sm:flex-row sm:items-center">
         <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
         
-        <button
-          onClick={handleReprioritize}
-          disabled={reprioritizing || filteredTasks.filter(t => t.status === 'pending').length === 0}
-          className="mt-2 inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-300 sm:mt-0"
-        >
-          {reprioritizing ? 'Reprioritizing...' : 'Reprioritize Tasks'}
-        </button>
+        <div className="flex items-center gap-2 mt-2 sm:mt-0">
+          <button
+            onClick={() => setShowQuickEntry(true)}
+            className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            title="Quick task entry (Cmd/Ctrl + K)"
+          >
+            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Quick Add
+            <kbd className="ml-2 text-xs text-gray-500 bg-gray-100 px-1 rounded">⌘K</kbd>
+          </button>
+          
+          <button
+            onClick={handleReprioritize}
+            disabled={reprioritizing || filteredTasks.filter(t => t.status === 'pending').length === 0}
+            className="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-300"
+          >
+            {reprioritizing ? 'Reprioritizing...' : 'Reprioritize Tasks'}
+          </button>
+        </div>
       </div>
       
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-4">
@@ -258,6 +288,12 @@ function TasksPage() {
           </div>
         </div>
       )}
+
+      {/* Quick Task Entry Modal */}
+      <QuickTaskEntry 
+        isOpen={showQuickEntry}
+        onClose={() => setShowQuickEntry(false)}
+      />
     </div>
   );
 }

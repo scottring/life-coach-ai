@@ -6,7 +6,6 @@ import { useAIAssistant } from './hooks/useAIAssistant';
 // Components
 import Login from './components/Login';
 import Header from './components/Header';
-import ContextBar from './components/ContextBar';
 import AIAssistant from './components/AIAssistant';
 import MobileNav from './components/MobileNav';
 
@@ -63,7 +62,6 @@ function App() {
             >
               <div className="min-h-screen bg-gray-50">
                 <Header />
-                <ContextBar />
                 <main className="pb-16 md:pb-0">
                   <Routes>
                     <Route path="/" element={<DailyItinerary />} />

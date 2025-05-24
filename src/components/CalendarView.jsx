@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isToday, isSameDay } from 'date-fns';
+import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isToday, isSameDay, setHours, setMinutes } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import EventDetail from './EventDetail';
 
@@ -9,6 +9,8 @@ function CalendarView() {
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(null);
   
   // Fetch calendar events from database
   useEffect(() => {
@@ -99,6 +101,51 @@ function CalendarView() {
     );
     fetchCalendarEvents(); // Refresh to get latest data
   };
+
+  const createEvent = async (eventData) => {
+    try {
+      const { error } = await supabase
+        .from('calendar_events')
+        .insert({
+          ...eventData,
+          google_event_id: `local-${Date.now()}`,
+          calendar_id: 'local-calendar',
+          calendar_type: 'personal',
+          status: 'confirmed',
+          attendees: [],
+          all_day: false,
+          timezone: 'America/New_York'
+        });
+      
+      if (error) throw error;
+      
+      fetchCalendarEvents();
+      setShowCreateModal(false);
+      setSelectedDate(null);
+    } catch (error) {
+      console.error('Error creating event:', error);
+      alert('Failed to create event');
+    }
+  };
+
+  const deleteEvent = async (eventId) => {
+    if (!confirm('Are you sure you want to delete this event?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('calendar_events')
+        .delete()
+        .eq('id', eventId);
+      
+      if (error) throw error;
+      
+      fetchCalendarEvents();
+      setSelectedEvent(null);
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert('Failed to delete event');
+    }
+  };
   
   if (loading) {
     return (
@@ -115,27 +162,38 @@ function CalendarView() {
         <h2 className="text-xl font-bold text-gray-800">Calendar</h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={goToPreviousWeek}
-            className="rounded-md p-2 hover:bg-gray-100"
+            onClick={() => {
+              setSelectedDate(new Date());
+              setShowCreateModal(true);
+            }}
+            className="rounded-md bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            + New Event
           </button>
-          <button
-            onClick={goToToday}
-            className="rounded-md px-3 py-1 text-sm font-medium hover:bg-gray-100"
-          >
-            Today
-          </button>
-          <button
-            onClick={goToNextWeek}
-            className="rounded-md p-2 hover:bg-gray-100"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+          <div className="ml-2 flex items-center gap-1 border-l pl-2">
+            <button
+              onClick={goToPreviousWeek}
+              className="rounded-md p-2 hover:bg-gray-100"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              onClick={goToToday}
+              className="rounded-md px-3 py-1 text-sm font-medium hover:bg-gray-100"
+            >
+              Today
+            </button>
+            <button
+              onClick={goToNextWeek}
+              className="rounded-md p-2 hover:bg-gray-100"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
       
@@ -223,8 +281,148 @@ function CalendarView() {
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
           onUpdate={handleEventUpdate}
+          onDelete={() => deleteEvent(selectedEvent.id)}
         />
       )}
+
+      {/* Create Event Modal */}
+      {showCreateModal && (
+        <CreateEventModal
+          selectedDate={selectedDate}
+          onClose={() => {
+            setShowCreateModal(false);
+            setSelectedDate(null);
+          }}
+          onCreate={createEvent}
+        />
+      )}
+    </div>
+  );
+}
+
+// Create Event Modal Component
+function CreateEventModal({ selectedDate, onClose, onCreate }) {
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    location: '',
+    start_time: selectedDate ? format(selectedDate, "yyyy-MM-dd'T'HH:mm") : format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+    end_time: selectedDate ? format(addDays(selectedDate, 0), "yyyy-MM-dd'T'") + format(addDays(selectedDate, 0), 'HH:mm') : format(addDays(new Date(), 0), "yyyy-MM-dd'T'HH:mm"),
+    event_type: 'meeting'
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.title) {
+      alert('Please enter a title');
+      return;
+    }
+    onCreate(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-semibold">New Event</h3>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 hover:bg-gray-100"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Title</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Event title"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              rows={3}
+              placeholder="Event description (optional)"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Location</label>
+            <input
+              type="text"
+              value={formData.location}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Location (optional)"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Start Time</label>
+              <input
+                type="datetime-local"
+                value={formData.start_time}
+                onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">End Time</label>
+              <input
+                type="datetime-local"
+                value={formData.end_time}
+                onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Event Type</label>
+            <select
+              value={formData.event_type}
+              onChange={(e) => setFormData({ ...formData, event_type: e.target.value })}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="meeting">Meeting</option>
+              <option value="personal">Personal</option>
+              <option value="family">Family</option>
+              <option value="medical">Medical</option>
+              <option value="travel">Travel</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div className="flex gap-2 pt-4">
+            <button
+              type="submit"
+              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            >
+              Create Event
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,7 @@ import SettingsPage from './pages/SettingsPage';
 import TestPage from './pages/TestPage';
 import DailyItinerary from './components/DailyItinerary';
 import TravelDashboard from './pages/TravelDashboard';
+import CalendarView from './components/CalendarView';
 
 // Providers
 import { TaskProvider } from './providers/TaskProvider';
@@ -72,6 +73,7 @@ function App() {
                     <Route path="/tasks" element={<TasksPage />} />
                     <Route path="/goals" element={<GoalsPage />} />
                     <Route path="/travel" element={<TravelDashboard />} />
+                    <Route path="/calendar" element={<CalendarView />} />
                     <Route path="/analytics" element={<AnalyticsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                   </Routes>

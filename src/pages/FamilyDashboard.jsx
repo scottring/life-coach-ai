@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthState } from '../hooks/useAuthState';
 import { FamilyProvider, useFamily } from '../providers/FamilyProvider';
+import { supabase } from '../lib/supabaseClient';
+import { format, differenceInDays } from 'date-fns';
 import DashboardSelector from '../components/DashboardSelector';
 import FamilyMealPlanner from '../components/FamilyMealPlanner';
 import FamilyMembers from '../components/FamilyMembers';
@@ -182,6 +184,7 @@ function FamilyContent({ activeTab, familyId, userFamilies, loadingFamilies, onF
 
 // Family Overview Component with real data integration
 function FamilyOverview({ familyId }) {
+  const { user } = useAuthState();
   const { 
     familyMeals, 
     familyTasks, 
@@ -190,6 +193,47 @@ function FamilyOverview({ familyId }) {
     shoppingItems,
     loading 
   } = useFamily();
+  
+  const [upcomingTrips, setUpcomingTrips] = useState([]);
+  const [familyTravelTasks, setFamilyTravelTasks] = useState([]);
+  
+  useEffect(() => {
+    if (user?.id) {
+      loadFamilyTravelData();
+    }
+  }, [user?.id]);
+  
+  const loadFamilyTravelData = async () => {
+    try {
+      // Load upcoming trips
+      const { data: tripsData, error: tripsError } = await supabase
+        .from('calendar_events')
+        .select('*')
+        .or('title.ilike.%flight%,title.ilike.%trip%,title.ilike.%travel%,title.ilike.%vacation%,event_type.eq.flight')
+        .gte('start_time', new Date().toISOString())
+        .order('start_time', { ascending: true })
+        .limit(3);
+      
+      if (tripsError) throw tripsError;
+      setUpcomingTrips(tripsData || []);
+      
+      // Load family travel tasks
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .or('context.eq.Travel,tags.cs.["travel"]')
+        .eq('completed', false)
+        .order('deadline', { ascending: true })
+        .limit(5);
+      
+      if (tasksError) throw tasksError;
+      setFamilyTravelTasks(tasksData || []);
+      
+    } catch (error) {
+      console.error('Error loading family travel data:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -216,7 +260,7 @@ function FamilyOverview({ familyId }) {
           {thisWeekMeals.length === 0 ? (
             <p className="text-sm text-gray-500">No meals planned yet</p>
           ) : (
-            thisWeekMeals.map((meal, index) => (
+            thisWeekMeals.map((meal) => (
               <div key={meal.id} className="flex justify-between text-sm">
                 <span className="text-gray-600">{new Date(meal.date).toLocaleDateString('en-US', { weekday: 'long' })}</span>
                 <span className="font-medium">{meal.dish_name}</span>
@@ -336,6 +380,61 @@ function FamilyOverview({ familyId }) {
           )}
           <div className="mt-3">
             <button className="text-sm text-blue-600 hover:text-blue-800">Manage members →</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Family Travel */}
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Family Travel</h3>
+          <span className="text-2xl">✈️</span>
+        </div>
+        <div className="space-y-3">
+          {upcomingTrips.length === 0 ? (
+            <p className="text-sm text-gray-500">No upcoming trips</p>
+          ) : (
+            <div className="space-y-2">
+              {upcomingTrips.slice(0, 2).map((trip) => {
+                const destination = trip.title.replace(/flight|trip|travel|to/gi, '').trim() || trip.location;
+                const daysUntil = differenceInDays(new Date(trip.start_time), new Date());
+                return (
+                  <div key={trip.id} className="flex justify-between items-center">
+                    <div>
+                      <div className="text-sm font-medium">{destination}</div>
+                      <div className="text-xs text-gray-500">
+                        {format(new Date(trip.start_time), 'MMM d, yyyy')}
+                      </div>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-600 font-medium">
+                      {daysUntil} days
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          
+          {familyTravelTasks.length > 0 && (
+            <div className="border-t pt-3 mt-3">
+              <div className="text-xs text-gray-500 mb-2">Travel Tasks ({familyTravelTasks.length})</div>
+              <div className="space-y-1">
+                {familyTravelTasks.slice(0, 3).map((task) => (
+                  <div key={task.id} className="text-sm text-gray-700 truncate">
+                    • {task.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <div className="mt-3">
+            <button 
+              onClick={() => window.location.href = '/travel'}
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              View travel dashboard →
+            </button>
           </div>
         </div>
       </div>

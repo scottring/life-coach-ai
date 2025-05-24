@@ -18,6 +18,11 @@ function DashboardPage() {
     .filter(task => task.status === 'pending' && task.priority >= 4)
     .slice(0, 5);
 
+  // Get travel tasks
+  const travelTasks = tasks
+    .filter(task => task.status === 'pending' && task.context === 'Travel')
+    .slice(0, 5);
+
   const handleDeleteTask = async (taskId) => {
     await deleteTask(taskId);
   };
@@ -62,8 +67,8 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* Content Grid - Tasks, Events, Goals */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 mb-8">
+      {/* Content Grid - Tasks, Travel, Events, Goals */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-4 mb-8">
         {/* High Priority Tasks */}
         <div className="rounded-lg bg-white p-6 shadow">
           <h2 className="mb-4 text-lg font-semibold text-gray-900">
@@ -104,6 +109,63 @@ function DashboardPage() {
             </div>
           ) : (
             <p className="text-center text-gray-500">No high priority tasks</p>
+          )}
+        </div>
+
+        {/* Travel Tasks */}
+        <div className="rounded-lg bg-white p-6 shadow">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Travel Tasks</h2>
+            <a 
+              href="/travel" 
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              View All
+            </a>
+          </div>
+          {travelTasks.length > 0 ? (
+            <div className="space-y-3">
+              {travelTasks.map(task => (
+                <div key={task.id} className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 group">
+                  <input
+                    type="checkbox"
+                    checked={task.status === 'completed'}
+                    onChange={() => handleToggleComplete(task)}
+                    className="mt-1 h-4 w-4 text-blue-600 rounded border-gray-300 cursor-pointer"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{task.title}</p>
+                    {task.deadline && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Due: {new Date(task.deadline).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2 flex-shrink-0">
+                    <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                      Travel
+                    </span>
+                    <button
+                      onClick={() => handleDeleteTask(task.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded"
+                      title="Delete task"
+                    >
+                      <TrashIcon className="h-4 w-4 text-gray-500 hover:text-red-600" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-gray-500">
+              <p className="text-sm">No travel tasks</p>
+              <a 
+                href="/travel" 
+                className="text-xs text-blue-600 hover:text-blue-700 mt-1 inline-block"
+              >
+                Plan a trip
+              </a>
+            </div>
           )}
         </div>
 

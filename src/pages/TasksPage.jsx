@@ -145,6 +145,7 @@ function TasksPage() {
                 <option value="Work">Work</option>
                 <option value="Personal">Personal</option>
                 <option value="Family">Family</option>
+                <option value="Travel">Travel</option>
                 <option value="Learning">Learning</option>
               </select>
               

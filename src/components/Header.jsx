@@ -49,6 +49,12 @@ function Header() {
             Goals
           </Link>
           <Link 
+            to="/travel" 
+            className={`text-sm ${isActive('/travel') ? 'font-medium text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Travel
+          </Link>
+          <Link 
             to="/analytics" 
             className={`text-sm ${isActive('/analytics') ? 'font-medium text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
           >

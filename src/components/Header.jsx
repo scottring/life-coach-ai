@@ -23,7 +23,7 @@ function Header() {
         </div>
         
         {/* Desktop Navigation */}
-        <nav className="hidden items-center space-x-6 lg:flex">
+        <nav className="hidden items-center space-x-6 md:flex">
           <Link 
             to="/today" 
             className={`text-sm ${isActive('/today') || isActive('/') ? 'font-medium text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
@@ -71,7 +71,7 @@ function Header() {
         {/* Mobile menu button */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="lg:hidden"
+          className="md:hidden"
         >
           <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -81,7 +81,7 @@ function Header() {
 
       {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="border-t border-gray-200 px-4 py-2 lg:hidden">
+        <div className="border-t border-gray-200 px-4 py-2 md:hidden">
           <Link
             to="/settings"
             className="block py-2 text-gray-600"

@@ -48,13 +48,13 @@ function MobileNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white md:hidden">
       <div className="grid grid-cols-4">
         {navItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
-            className={`flex flex-col items-center py-2 ${
+            className={`flex flex-col items-center py-3 ${
               isActive(item.path) 
                 ? 'text-blue-600' 
                 : 'text-gray-600 hover:text-gray-900'

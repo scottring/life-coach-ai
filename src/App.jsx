@@ -63,7 +63,7 @@ function App() {
               <div className="min-h-screen bg-gray-50">
                 <Header />
                 <ContextBar />
-                <main className="pb-12 lg:pb-0">
+                <main className="pb-16 md:pb-0">
                   <Routes>
                     <Route path="/" element={<DailyItinerary />} />
                     <Route path="/today" element={<DailyItinerary />} />

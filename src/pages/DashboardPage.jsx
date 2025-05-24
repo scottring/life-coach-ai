@@ -62,15 +62,8 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* Full Width Calendar */}
-      <div className="mb-8">
-        <div className="rounded-lg bg-white p-6 shadow">
-          <CalendarView />
-        </div>
-      </div>
-
-      {/* Content Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* Content Grid - Tasks, Events, Goals */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 mb-8">
         {/* High Priority Tasks */}
         <div className="rounded-lg bg-white p-6 shadow">
           <h2 className="mb-4 text-lg font-semibold text-gray-900">
@@ -123,6 +116,11 @@ function DashboardPage() {
         <div className="rounded-lg bg-white p-6 shadow">
           <GoalProgress />
         </div>
+      </div>
+
+      {/* Full Width Calendar - Below the content grid */}
+      <div className="rounded-lg bg-white p-6 shadow">
+        <CalendarView />
       </div>
     </div>
   );

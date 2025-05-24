@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuthState } from '../hooks/useAuthState';
 import TaskAnalytics from '../components/TaskAnalytics';
-import CalendarView from '../components/CalendarView';
 import InsightsPanel from '../components/InsightsPanel';
 
 function AnalyticsPage() {
@@ -50,10 +49,6 @@ function AnalyticsPage() {
         <div className="space-y-6">
           <InsightsPanel userContext={userContext} />
         </div>
-      </div>
-      
-      <div className="mt-6">
-        <CalendarView />
       </div>
     </div>
   );

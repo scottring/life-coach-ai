@@ -222,8 +222,8 @@ function FamilyOverview({ familyId }) {
         .from('tasks')
         .select('*')
         .eq('user_id', user.id)
-        .or('context.eq.Travel,tags.cs.["travel"]')
-        .eq('completed', false)
+        .eq('context', 'Travel')
+        .eq('status', 'pending')
         .order('deadline', { ascending: true })
         .limit(5);
       

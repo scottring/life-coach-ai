@@ -76,6 +76,22 @@ export const FamilyAdapter = {
     return data;
   },
 
+  async createFamilyMember(memberData) {
+    const { data, error } = await supabase
+      .from('family_members')
+      .insert({
+        user_id: memberData.user_id,
+        name: memberData.name,
+        role: memberData.role,
+        avatar_color: memberData.avatar_color
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   async getFamilyMeals(familyId) {
     const { data, error } = await supabase
       .from('family_meals')

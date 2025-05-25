@@ -224,6 +224,20 @@ export function FamilyProvider({ children }) {
     }
   };
 
+  const addFamilyMember = async (memberData) => {
+    try {
+      const newMember = await FamilyAdapter.createFamilyMember(memberData);
+      dispatch({ 
+        type: 'SET_FAMILY_MEMBERS', 
+        payload: [...state.familyMembers, newMember]
+      });
+      return newMember;
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: error.message });
+      throw error;
+    }
+  };
+
   const value = {
     ...state,
     loadFamilyData,
@@ -236,7 +250,8 @@ export function FamilyProvider({ children }) {
     createFamilyTask,
     updateFamilyTask,
     createFamilyGoal,
-    updateFamilyGoal
+    updateFamilyGoal,
+    addFamilyMember
   };
 
   return (

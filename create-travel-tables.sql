@@ -88,3 +88,30 @@ CREATE POLICY "Users can manage their event prep tasks"
       AND trip_events.user_id = auth.uid()::text
     )
   );
+
+-- Create travel_brain_dumps table for iterative AI brain dump sessions
+CREATE TABLE IF NOT EXISTS travel_brain_dumps (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  trip_destination TEXT NOT NULL,
+  brain_dump_text TEXT NOT NULL,
+  generated_task_count INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- Create indexes for brain dumps
+CREATE INDEX IF NOT EXISTS idx_travel_brain_dumps_user_destination 
+ON travel_brain_dumps(user_id, trip_destination);
+
+CREATE INDEX IF NOT EXISTS idx_travel_brain_dumps_created_at 
+ON travel_brain_dumps(created_at);
+
+-- Enable RLS for brain dumps
+ALTER TABLE travel_brain_dumps ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for brain dumps
+DROP POLICY IF EXISTS "Users can manage their own travel brain dumps" ON travel_brain_dumps;
+CREATE POLICY "Users can manage their own travel brain dumps"
+  ON travel_brain_dumps FOR ALL
+  USING (auth.uid()::text = user_id);

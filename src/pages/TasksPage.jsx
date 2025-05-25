@@ -5,6 +5,7 @@ import DuplicateTaskManager from '../components/DuplicateTaskManager';
 import QuickTaskEntry from '../components/QuickTaskEntry';
 import { useTasks } from '../providers/TaskProvider';
 import { useAuthState } from '../hooks/useAuthState';
+import { supabase } from '../lib/supabaseClient';
 
 function TasksPage() {
   const { tasks: allTasks, updateTask, completeTask, deleteTask, reprioritizeTasks, refreshTasks } = useTasks();
@@ -18,6 +19,46 @@ function TasksPage() {
   const [reprioritizing, setReprioritizing] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState(null);
   const [showQuickEntry, setShowQuickEntry] = useState(false);
+  const [familyMembers, setFamilyMembers] = useState([]);
+  
+  useEffect(() => {
+    if (user?.id) {
+      loadFamilyMembers();
+    }
+  }, [user?.id]);
+
+  const loadFamilyMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('family_members')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      setFamilyMembers(data || []);
+    } catch (error) {
+      console.error('Error loading family members:', error);
+    }
+  };
+
+  const moveTaskUp = (taskIndex) => {
+    if (taskIndex > 0) {
+      // In a real implementation, you'd update the task order in the database
+      // For now, we'll just update the local state
+      console.log('Moving task up:', filteredTasks[taskIndex].title);
+    }
+  };
+
+  const moveTaskDown = (taskIndex) => {
+    if (taskIndex < filteredTasks.length - 1) {
+      // In a real implementation, you'd update the task order in the database
+      console.log('Moving task down:', filteredTasks[taskIndex].title);
+    }
+  };
+
+  const getAssignedMember = (taskAssignedTo) => {
+    return familyMembers.find(member => member.id === taskAssignedTo);
+  };
   
   // Filter tasks based on current filters
   const filteredTasks = allTasks.filter(task => {
@@ -196,7 +237,7 @@ function TasksPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredTasks.map(task => (
+            {filteredTasks.map((task, index) => (
               <div 
                 key={task.id}
                 className="cursor-pointer"
@@ -205,6 +246,36 @@ function TasksPage() {
                 <div className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm priority-${task.priority}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-3">
+                      {/* Reorder buttons */}
+                      <div className="flex flex-col">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveTaskUp(index);
+                          }}
+                          disabled={index === 0}
+                          className="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move up"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveTaskDown(index);
+                          }}
+                          disabled={index === filteredTasks.length - 1}
+                          className="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move down"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      </div>
+
                       <button 
                         className="mt-1 h-5 w-5 rounded-full border border-gray-400 hover:bg-gray-100"
                         onClick={(e) => {
@@ -216,12 +287,36 @@ function TasksPage() {
                         {task.status === 'completed' ? '✓' : ''}
                       </button>
                       
-                      <div className="task-content">
+                      <div className="task-content flex-1">
                         <h3 className={`text-lg font-semibold ${task.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
                           {task.title}
                         </h3>
                         {task.description && (
                           <p className="mt-1 text-sm text-gray-600">{task.description}</p>
+                        )}
+                        
+                        {/* Assigned member */}
+                        {task.assigned_to && (
+                          <div className="mt-2">
+                            {(() => {
+                              const assignedMember = getAssignedMember(task.assigned_to);
+                              return assignedMember ? (
+                                <div className="flex items-center gap-2">
+                                  <div 
+                                    className="h-6 w-6 rounded-full flex items-center justify-center text-xs"
+                                    style={{ backgroundColor: assignedMember.avatar_color || '#9CA3AF' }}
+                                  >
+                                    {assignedMember.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="text-sm text-gray-600">
+                                    Assigned to {assignedMember.name}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-sm text-gray-500">Assigned to unknown member</span>
+                              );
+                            })()}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -231,6 +326,7 @@ function TasksPage() {
                         {task.context === 'Work' ? '💼' : 
                          task.context === 'Personal' ? '🏠' : 
                          task.context === 'Family' ? '👨‍👩‍👧‍👦' :
+                         task.context === 'Travel' ? '✈️' :
                          task.context === 'Learning' ? '📚' : '📝'}
                       </span>
                       

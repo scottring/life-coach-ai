@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTasks } from '../providers/TaskProvider';
 import { useAuthState } from '../hooks/useAuthState';
 import { useAIAssistant } from '../hooks/useAIAssistant';
+import { supabase } from '../lib/supabaseClient';
 
 function TaskCreator({ onTaskCreated }) {
   const { createTask } = useTasks();
@@ -13,10 +14,32 @@ function TaskCreator({ onTaskCreated }) {
     description: '',
     deadline: '',
     context: 'Work',
-    priority: 3
+    priority: 3,
+    assignedTo: ''
   });
   
   const [creating, setCreating] = useState(false);
+  const [familyMembers, setFamilyMembers] = useState([]);
+
+  useEffect(() => {
+    if (user?.id) {
+      loadFamilyMembers();
+    }
+  }, [user?.id]);
+
+  const loadFamilyMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('family_members')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      setFamilyMembers(data || []);
+    } catch (error) {
+      console.error('Error loading family members:', error);
+    }
+  };
   
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -34,7 +57,8 @@ function TaskCreator({ onTaskCreated }) {
       const createdTask = await createTask({
         ...newTask,
         user_id: user.id,
-        status: 'pending'
+        status: 'pending',
+        assigned_to: newTask.assignedTo || null
       });
       
       if (createdTask) {
@@ -44,7 +68,8 @@ function TaskCreator({ onTaskCreated }) {
           description: '',
           deadline: '',
           context: 'Work',
-          priority: 3
+          priority: 3,
+          assignedTo: ''
         });
         
         // Notify parent component
@@ -129,6 +154,28 @@ function TaskCreator({ onTaskCreated }) {
             </select>
           </div>
         </div>
+
+        {familyMembers.length > 0 && (
+          <div>
+            <label htmlFor="assignedTo" className="block text-sm font-medium text-gray-700">
+              Assign To
+            </label>
+            <select
+              id="assignedTo"
+              name="assignedTo"
+              value={newTask.assignedTo}
+              onChange={handleInputChange}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+            >
+              <option value="">Unassigned</option>
+              {familyMembers.map(member => (
+                <option key={member.id} value={member.id}>
+                  {member.name} ({member.role})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         
         <div>
           <label htmlFor="priority" className="block text-sm font-medium text-gray-700">

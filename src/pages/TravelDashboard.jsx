@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTravelAI } from '../hooks/useTravelAI';
 import { useAuthState } from '../hooks/useAuthState';
 import { useAIAssistant } from '../hooks/useAIAssistant';
-import { DocumentArrowUpIcon, LinkIcon, CalendarIcon, UserGroupIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { DocumentArrowUpIcon, LinkIcon, CalendarIcon, UserGroupIcon, SparklesIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 import TravelEvent from '../components/TravelEvent';
 import TravelPlanningAssistant from '../components/TravelPlanningAssistant';
 
@@ -335,24 +335,46 @@ function TravelDashboard() {
         - Trip duration
         - Common activities in ${trip.destination}
         
-        Return a JSON array of categories with items:
-        [{"category": "Documents", "items": ["item1", "item2"]}, ...]
+        IMPORTANT: Return ONLY a valid JSON array with this exact format:
+        [
+          {"category": "Documents", "items": ["Passports", "Travel insurance"]},
+          {"category": "Clothing", "items": ["Weather-appropriate clothes", "Comfortable shoes"]},
+          {"category": "Electronics", "items": ["Phone chargers", "Camera"]},
+          {"category": "Health", "items": ["Medications", "First aid kit"]},
+          {"category": "Activities", "items": ["Travel games", "Books"]},
+          {"category": "Food/Snacks", "items": ["Snacks for travel", "Water bottles"]}
+        ]
         
-        Categories should include: Documents, Clothing, Electronics, Health, Activities, Food/Snacks`;
+        Do not include any explanatory text, markdown formatting, or additional commentary. Just return the JSON array.`;
 
         const response = await generateWithAI(prompt);
         console.log('AI response for packing list:', response);
         
         let packingData;
         try {
-          // Clean the response by removing markdown code blocks
+          // Clean the response by removing markdown code blocks and extra text
           let cleanedResponse = response.trim();
+          
+          // Remove markdown code blocks
           if (cleanedResponse.startsWith('```json')) {
-            cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```.*$/, '');
           } else if (cleanedResponse.startsWith('```')) {
-            cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+            cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```.*$/, '');
           }
           
+          // Try to extract JSON array if there's extra text
+          const jsonMatch = cleanedResponse.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            cleanedResponse = jsonMatch[0];
+          }
+          
+          // Additional cleanup - remove any text after the closing bracket
+          const lastBracketIndex = cleanedResponse.lastIndexOf(']');
+          if (lastBracketIndex !== -1) {
+            cleanedResponse = cleanedResponse.substring(0, lastBracketIndex + 1);
+          }
+          
+          console.log('Cleaned response for parsing:', cleanedResponse);
           packingData = JSON.parse(cleanedResponse);
           console.log('Parsed packing data:', packingData);
           
@@ -360,6 +382,17 @@ function TravelDashboard() {
           if (!Array.isArray(packingData)) {
             console.warn('AI response is not an array, using fallback');
             throw new Error('Response is not an array');
+          }
+          
+          // Validate array items have expected structure
+          packingData = packingData.filter(item => 
+            item && typeof item === 'object' && 
+            item.category && 
+            (Array.isArray(item.items) || typeof item.items === 'string')
+          );
+          
+          if (packingData.length === 0) {
+            throw new Error('No valid packing categories found');
           }
         } catch (parseError) {
           console.error('Failed to parse AI response:', parseError);
@@ -739,6 +772,12 @@ function TravelDashboard() {
           <TripTaskCreator 
             selectedTrip={selectedTrip}
             onTaskCreated={loadTripTasks}
+          />
+
+          {/* Iterative Brain Dump */}
+          <IterativeBrainDump 
+            selectedTrip={selectedTrip}
+            onTasksGenerated={loadTripTasks}
           />
 
           {/* Trip Tasks Hub */}
@@ -1157,6 +1196,296 @@ const SmartPackingList = ({ data }) => {
           </div>
         </div>
       ))}
+    </div>
+  );
+};
+
+const IterativeBrainDump = ({ selectedTrip, onTasksGenerated }) => {
+  const { generateWithAI } = useAIAssistant();
+  const { createTask } = useTasks();
+  const { user } = useAuthState();
+  const [showBrainDump, setShowBrainDump] = useState(false);
+  const [brainDumpText, setBrainDumpText] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [brainDumpHistory, setBrainDumpHistory] = useState([]);
+  const [lastGeneration, setLastGeneration] = useState(null);
+
+  useEffect(() => {
+    if (user?.id) {
+      loadBrainDumpHistory();
+    }
+  }, [selectedTrip.destination, user?.id]);
+
+  const loadBrainDumpHistory = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('travel_brain_dumps')
+        .select('*')
+        .eq('trip_destination', selectedTrip.destination)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (error && error.code !== '42P01' && error.status !== 404) { // Table doesn't exist yet
+        throw error;
+      }
+      setBrainDumpHistory(data || []);
+    } catch (error) {
+      console.error('Error loading brain dump history:', error);
+      // If table doesn't exist, just use empty array
+      setBrainDumpHistory([]);
+    }
+  };
+
+  const saveBrainDumpToHistory = async (text, generatedTaskCount) => {
+    if (!user?.id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('travel_brain_dumps')
+        .insert({
+          trip_destination: selectedTrip.destination,
+          user_id: user.id,
+          brain_dump_text: text,
+          generated_task_count: generatedTaskCount,
+          created_at: new Date().toISOString()
+        });
+      
+      if (error && error.code !== '42P01' && error.status !== 404) {
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error saving brain dump:', error);
+      // If table doesn't exist, continue without saving history
+    }
+  };
+
+  const handleBrainDumpSubmit = async () => {
+    if (!brainDumpText.trim()) return;
+    
+    setIsProcessing(true);
+    try {
+      const contextualPrompt = `I'm continuing to plan my ${selectedTrip.destination} trip (${format(selectedTrip.startDate, 'MMM d')} - ${format(selectedTrip.endDate, 'MMM d')}). 
+      
+      ${brainDumpHistory.length > 0 ? `I've already done some planning - here's my previous thoughts:
+      ${brainDumpHistory.slice(0, 2).map(dump => `• ${dump.brain_dump_text.substring(0, 200)}...`).join('\n')}
+      
+      Now I have some additional thoughts:` : 'Here are my additional thoughts about this trip:'}
+      
+      "${brainDumpText}"
+      
+      Please analyze these new thoughts and create specific, actionable tasks. Focus on:
+      1. NEW items I haven't thought of before
+      2. Building on previous planning (if any)
+      3. Time-sensitive items based on trip date
+      4. Family logistics and coordination
+      
+      Return ONLY a JSON array of tasks:
+      [{"title": "task title", "description": "detailed description", "priority": 1-5, "deadline": "YYYY-MM-DD", "category": "category"}]
+      
+      Categories: EVENTS, HOME_LOGISTICS, LIFE_ADMIN, SHOPPING_WARDROBE, FAMILY_KIDS, WORK_PROFESSIONAL, TRAVEL_LOGISTICS, HEALTH_DOCUMENTS, TECH_ADMIN`;
+
+      const response = await generateWithAI(contextualPrompt);
+      console.log('AI response for iterative brain dump:', response);
+      
+      // Clean response and parse
+      let cleanedResponse = response.trim();
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
+      let tasks;
+      try {
+        tasks = JSON.parse(cleanedResponse);
+        if (!Array.isArray(tasks)) {
+          throw new Error('Response is not an array');
+        }
+      } catch (parseError) {
+        console.error('Failed to parse AI response:', parseError);
+        // Create a basic task from the brain dump
+        tasks = [{
+          title: `Review brain dump: ${brainDumpText.substring(0, 50)}...`,
+          description: brainDumpText,
+          priority: 3,
+          deadline: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
+          category: 'TRAVEL_LOGISTICS'
+        }];
+      }
+
+      // Create tasks
+      let createdCount = 0;
+      for (const taskData of tasks) {
+        try {
+          await createTask({
+            title: taskData.title,
+            description: `${taskData.description} (${selectedTrip.destination} trip)`,
+            priority: taskData.priority || 3,
+            deadline: taskData.deadline ? new Date(taskData.deadline).toISOString() : null,
+            context: 'Travel'
+          });
+          createdCount++;
+        } catch (error) {
+          console.error('Error creating task:', error);
+        }
+      }
+
+      // Save to history
+      await saveBrainDumpToHistory(brainDumpText, createdCount);
+      
+      // Update state
+      setLastGeneration({
+        taskCount: createdCount,
+        timestamp: new Date()
+      });
+      setBrainDumpText('');
+      setShowBrainDump(false);
+      
+      // Refresh tasks and history
+      if (onTasksGenerated) onTasksGenerated();
+      await loadBrainDumpHistory();
+      
+    } catch (error) {
+      console.error('Error processing brain dump:', error);
+      alert('Failed to process brain dump. Please try again.');
+    }
+    setIsProcessing(false);
+  };
+
+  if (!showBrainDump) {
+    return (
+      <div className="rounded-lg bg-white p-6 shadow mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <SparklesIcon className="h-6 w-6 text-purple-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">AI Brain Dump</h3>
+              <p className="text-sm text-gray-600">
+                Got new thoughts about your {selectedTrip.destination} trip? Let AI turn them into tasks!
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            {brainDumpHistory.length > 0 && (
+              <div className="text-right text-xs text-gray-500">
+                <div>{brainDumpHistory.length} previous brain dumps</div>
+                <div>{brainDumpHistory.reduce((sum, dump) => sum + (dump.generated_task_count || 0), 0)} tasks generated</div>
+              </div>
+            )}
+            
+            <button
+              onClick={() => setShowBrainDump(true)}
+              className="inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+            >
+              <ChatBubbleLeftRightIcon className="h-4 w-4" />
+              Add Brain Dump
+            </button>
+          </div>
+        </div>
+
+        {/* Recent success message */}
+        {lastGeneration && (
+          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm text-green-800">
+              ✅ Generated {lastGeneration.taskCount} tasks from your last brain dump at {format(lastGeneration.timestamp, 'h:mm a')}
+            </p>
+          </div>
+        )}
+
+        {/* Quick history preview */}
+        {brainDumpHistory.length > 0 && (
+          <div className="mt-4 border-t pt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Recent Brain Dumps:</h4>
+            <div className="space-y-2">
+              {brainDumpHistory.slice(0, 2).map((dump) => (
+                <div key={dump.id} className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                  <div className="flex justify-between items-start">
+                    <p className="line-clamp-2">{dump.brain_dump_text.substring(0, 120)}...</p>
+                    <span className="ml-2 text-green-600 font-medium">+{dump.generated_task_count}</span>
+                  </div>
+                  <p className="text-gray-400 mt-1">{format(new Date(dump.created_at), 'MMM d, h:mm a')}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg bg-white p-6 shadow mb-6">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-purple-100 rounded-lg">
+          <SparklesIcon className="h-6 w-6 text-purple-600" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">AI Brain Dump</h3>
+          <p className="text-sm text-gray-600">
+            What new thoughts do you have about your {selectedTrip.destination} trip?
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Brain Dump ({brainDumpHistory.length > 0 ? 'Additional' : 'New'} Thoughts)
+          </label>
+          <textarea
+            value={brainDumpText}
+            onChange={(e) => setBrainDumpText(e.target.value)}
+            rows={6}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-purple-500"
+            placeholder={brainDumpHistory.length > 0 
+              ? "Just had another thought... Maybe I need to arrange a dog sitter, or pick up dry cleaning, or check if the hotel has a pool for the kids..."
+              : "Just dump everything on your mind about this trip... don't organize it, just brain dump! Think about events, family logistics, shopping needs, work prep, home arrangements..."
+            }
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={handleBrainDumpSubmit}
+            disabled={isProcessing || !brainDumpText.trim()}
+            className="inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:bg-purple-300"
+          >
+            {isProcessing ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Processing...
+              </>
+            ) : (
+              <>
+                <SparklesIcon className="h-4 w-4" />
+                Generate Tasks
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setShowBrainDump(false);
+              setBrainDumpText('');
+            }}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+        </div>
+
+        {brainDumpHistory.length > 0 && (
+          <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
+            💡 <strong>Tip:</strong> I'll consider your previous brain dumps for context, so just focus on new thoughts or things you've remembered since last time!
+          </div>
+        )}
+      </div>
     </div>
   );
 };

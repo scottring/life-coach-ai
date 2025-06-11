@@ -101,8 +101,7 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-700">Dog Behavior Tracker</h2>
+      <div className="flex justify-end mb-4">
         <button onClick={handleAddNewSOP} className="p-2 rounded-full hover:bg-gray-100" title="Add new SOP">
           <PlusIcon className="h-6 w-6 text-gray-500" />
         </button>

@@ -76,7 +76,9 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
               </svg>
             </div>
           </div>
-          <DogBehaviorWidget familyId={familyId} userId={userId} />
+          <div className="p-4">
+            <DogBehaviorWidget familyId={familyId} userId={userId} />
+          </div>
         </div>
         <div key="events" className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-b">

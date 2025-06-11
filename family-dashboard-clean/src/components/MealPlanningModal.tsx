@@ -5,8 +5,6 @@ import {
   UserGroupIcon, 
   XMarkIcon,
   PlusIcon,
-  StarIcon,
-  HeartIcon,
   ClockIcon,
   FireIcon,
   CakeIcon
@@ -24,7 +22,7 @@ interface MealPlanningModalProps {
 }
 
 export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPlanningModalProps) {
-  const [activeTab, setActiveTab] = useState<'planner' | 'attendance' | 'preferences' | 'availability'>('planner');
+  const [activeTab, setActiveTab] = useState<'preferences' | 'availability' | 'planner'>('preferences');
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [currentWeekPlan, setCurrentWeekPlan] = useState<WeeklyMealPlan | null>(null);
   const [selectedWeek, setSelectedWeek] = useState(new Date());
@@ -32,7 +30,6 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState<{meal: any, mealName: string, date: string} | null>(null);
-  const [mealAttendance, setMealAttendance] = useState<{[key: string]: {[key: string]: {breakfast: boolean, lunch: boolean, dinner: boolean}}}>({});
   const [availabilityGrid, setAvailabilityGrid] = useState<{[memberId: string]: {[dateKey: string]: boolean}}>({});
 
   useEffect(() => {
@@ -270,28 +267,6 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
         {/* Fixed Tabs */}
         <div className="flex border-b border-gray-200 px-6 flex-shrink-0">
           <button
-            onClick={() => setActiveTab('planner')}
-            className={`px-4 py-3 text-sm font-medium border-b-2 ${
-              activeTab === 'planner'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <CalendarIcon className="h-4 w-4 inline mr-2" />
-            Meal Planner
-          </button>
-          <button
-            onClick={() => setActiveTab('availability')}
-            className={`px-4 py-3 text-sm font-medium border-b-2 ${
-              activeTab === 'attendance'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <UserGroupIcon className="h-4 w-4 inline mr-2" />
-            Availability
-          </button>
-          <button
             onClick={() => setActiveTab('preferences')}
             className={`px-4 py-3 text-sm font-medium border-b-2 ${
               activeTab === 'preferences'
@@ -302,6 +277,28 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
             <UserGroupIcon className="h-4 w-4 inline mr-2" />
             Family Members
           </button>
+          <button
+            onClick={() => setActiveTab('availability')}
+            className={`px-4 py-3 text-sm font-medium border-b-2 ${
+              activeTab === 'availability'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <ClockIcon className="h-4 w-4 inline mr-2" />
+            Availability
+          </button>
+          <button
+            onClick={() => setActiveTab('planner')}
+            className={`px-4 py-3 text-sm font-medium border-b-2 ${
+              activeTab === 'planner'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <CalendarIcon className="h-4 w-4 inline mr-2" />
+            Meal Planner
+          </button>
         </div>
 
         {/* Scrollable Content */}
@@ -309,6 +306,243 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
           {loading ? (
             <div className="flex items-center justify-center h-32">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : activeTab === 'preferences' ? (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">Family Members</h3>
+                <button
+                  onClick={() => setShowPreferences(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                >
+                  <PlusIcon className="h-4 w-4 inline mr-2" />
+                  Add Member
+                </button>
+              </div>
+
+              {familyMembers.length > 0 ? (
+                <div className="space-y-4">
+                  {familyMembers.map(member => (
+                    <div key={member.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-gray-900">{member.name}</h4>
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded capitalize">
+                          {member.ageGroup}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-500 font-medium">Dietary Restrictions:</span>
+                          <div className="mt-1">
+                            {member.dietaryRestrictions.length > 0 ? (
+                              member.dietaryRestrictions.map(restriction => (
+                                <span key={restriction} className="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs mr-1 mb-1">
+                                  {restriction}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-gray-400 text-xs">None</span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-medium">Allergens:</span>
+                          <div className="mt-1">
+                            {member.allergens.length > 0 ? (
+                              member.allergens.map(allergen => (
+                                <span key={allergen} className="inline-block bg-red-100 text-red-800 px-2 py-1 rounded text-xs mr-1 mb-1">
+                                  {allergen}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-gray-400 text-xs">None</span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 font-medium">Favorite Foods:</span>
+                          <div className="mt-1">
+                            {member.favoriteFoods.length > 0 ? (
+                              member.favoriteFoods.map(food => (
+                                <span key={food} className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs mr-1 mb-1">
+                                  {food}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-gray-400 text-xs">None added yet</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <UserGroupIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">No family members added yet</p>
+                  <button
+                    onClick={() => setShowPreferences(true)}
+                    className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                  >
+                    Add your first family member
+                  </button>
+                </div>
+              )}
+
+            </div>
+          ) : activeTab === 'availability' ? (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">Family Availability</h3>
+                  <p className="text-sm text-gray-500">Mark when each family member is available for meals</p>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => navigateWeek('prev')}
+                    className="p-2 text-gray-400 hover:text-gray-600"
+                  >
+                    ←
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    Week of {getWeekStart(selectedWeek)}
+                  </span>
+                  <button
+                    onClick={() => navigateWeek('next')}
+                    className="p-2 text-gray-400 hover:text-gray-600"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+
+              {familyMembers.length > 0 ? (
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="grid grid-cols-8 border-b border-gray-200">
+                    <div className="px-4 py-3 text-sm font-medium text-gray-900 bg-gray-50 border-r border-gray-200">
+                      Member
+                    </div>
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="px-2 py-3 text-sm font-medium text-gray-900 bg-gray-50 text-center border-r border-gray-200 last:border-r-0">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+                  {familyMembers.map(member => (
+                    <div key={member.id} className="grid grid-cols-8 border-b border-gray-200 last:border-b-0">
+                      <div className="px-4 py-4 text-sm font-medium text-gray-900 bg-gray-50 border-r border-gray-200">
+                        {member.name}
+                      </div>
+                      {[0, 1, 2, 3, 4, 5, 6].map(dayIndex => {
+                        const weekStart = getWeekStart(selectedWeek);
+                        const date = new Date(weekStart);
+                        date.setDate(date.getDate() + dayIndex);
+                        const dateKey = date.toISOString().split('T')[0];
+                        const isAvailable = availabilityGrid[member.id]?.[dateKey] || false;
+                        
+                        return (
+                          <div key={dayIndex} className="p-2 border-r border-gray-200 last:border-r-0 text-center">
+                            <button
+                              onClick={() => {
+                                setAvailabilityGrid((prev: {[memberId: string]: {[dateKey: string]: boolean}}) => ({
+                                  ...prev,
+                                  [member.id]: {
+                                    ...prev[member.id],
+                                    [dateKey]: !isAvailable
+                                  }
+                                }));
+                              }}
+                              className={`w-8 h-8 rounded-full border-2 transition-colors ${
+                                isAvailable
+                                  ? 'bg-green-500 border-green-500 text-white'
+                                  : 'bg-white border-gray-300 hover:border-green-400'
+                              }`}
+                            >
+                              {isAvailable ? '✓' : ''}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <ClockIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">Add family members first to set availability</p>
+                  <button
+                    onClick={() => setActiveTab('preferences')}
+                    className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                  >
+                    Add family members
+                  </button>
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              {familyMembers.length > 0 && (
+                <div className="space-y-4">
+                  <h4 className="text-lg font-medium text-gray-900">Quick Actions</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button
+                      onClick={() => {
+                        const weekStart = getWeekStart(selectedWeek);
+                        const newGrid = { ...availabilityGrid };
+                        
+                        familyMembers.forEach(member => {
+                          for (let i = 0; i < 7; i++) {
+                            const date = new Date(weekStart);
+                            date.setDate(date.getDate() + i);
+                            const dateKey = date.toISOString().split('T')[0];
+                            
+                            if (!newGrid[member.id]) newGrid[member.id] = {};
+                            newGrid[member.id][dateKey] = true;
+                          }
+                        });
+                        
+                        setAvailabilityGrid(newGrid);
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                    >
+                      Mark All Available
+                    </button>
+                    <button
+                      onClick={() => {
+                        const weekStart = getWeekStart(selectedWeek);
+                        const newGrid = { ...availabilityGrid };
+                        
+                        familyMembers.forEach(member => {
+                          for (let i = 0; i < 7; i++) {
+                            const date = new Date(weekStart);
+                            date.setDate(date.getDate() + i);
+                            const dateKey = date.toISOString().split('T')[0];
+                            
+                            if (!newGrid[member.id]) newGrid[member.id] = {};
+                            newGrid[member.id][dateKey] = false;
+                          }
+                        });
+                        
+                        setAvailabilityGrid(newGrid);
+                      }}
+                      className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                  
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <h5 className="font-medium text-blue-900 mb-2">How to use availability:</h5>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      <li>• Click the circles to mark when family members are available</li>
+                      <li>• Green checkmarks = available for meals that day</li>
+                      <li>• This helps AI generate meal plans based on who's home</li>
+                      <li>• Navigate between weeks to set future availability</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
             </div>
           ) : activeTab === 'planner' ? (
             <div className="space-y-6">
@@ -608,92 +842,8 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                 </div>
               )}
             </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">Family Members</h3>
-                <button
-                  onClick={() => setShowPreferences(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
-                >
-                  <PlusIcon className="h-4 w-4 inline mr-2" />
-                  Add Member
-                </button>
-              </div>
-
-              {familyMembers.length > 0 ? (
-                <div className="space-y-4">
-                  {familyMembers.map(member => (
-                    <div key={member.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-medium text-gray-900">{member.name}</h4>
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded capitalize">
-                          {member.ageGroup}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-500 font-medium">Dietary Restrictions:</span>
-                          <div className="mt-1">
-                            {member.dietaryRestrictions.length > 0 ? (
-                              member.dietaryRestrictions.map(restriction => (
-                                <span key={restriction} className="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs mr-1 mb-1">
-                                  {restriction}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-gray-400 text-xs">None</span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 font-medium">Allergens:</span>
-                          <div className="mt-1">
-                            {member.allergens.length > 0 ? (
-                              member.allergens.map(allergen => (
-                                <span key={allergen} className="inline-block bg-red-100 text-red-800 px-2 py-1 rounded text-xs mr-1 mb-1">
-                                  {allergen}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-gray-400 text-xs">None</span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 font-medium">Favorite Foods:</span>
-                          <div className="mt-1">
-                            {member.favoriteFoods.length > 0 ? (
-                              member.favoriteFoods.map(food => (
-                                <span key={food} className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs mr-1 mb-1">
-                                  {food}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-gray-400 text-xs">None added yet</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <UserGroupIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No family members added yet</p>
-                  <button
-                    onClick={() => setShowPreferences(true)}
-                    className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                  >
-                    Add your first family member
-                  </button>
-                </div>
-              )}
-
-            </div>
-          )}
+          ) : null
+          }
         </div>
       </div>
 

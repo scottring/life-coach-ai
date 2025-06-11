@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import MealPlannerWidget from './MealPlannerWidget';
 import DogBehaviorWidget from './DogBehaviorWidget';
+import TodoWidget from './TodoWidget';
 import MealPlanningModal from './MealPlanningModal';
 
 // Import the required CSS for react-grid-layout
@@ -102,8 +103,8 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
               </svg>
             </div>
           </div>
-          <div className="p-6">
-            <p className="text-gray-600">All tasks completed!</p>
+          <div className="p-4">
+            <TodoWidget familyId={familyId} userId={userId} />
           </div>
         </div>
       </ResponsiveGridLayout>

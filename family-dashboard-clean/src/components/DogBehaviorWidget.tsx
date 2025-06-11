@@ -1,8 +1,9 @@
 // src/components/DogBehaviorWidget.tsx
 import React, { useState, useEffect } from 'react';
-import { DogSOP } from '../types/dogBehavior';
+import { DogSOP, SOPLogEntry } from '../types/dogBehavior';
 import { DogBehaviorService } from '../services/dogBehaviorService';
 import { ClipboardDocumentListIcon, PlusIcon } from '@heroicons/react/24/outline';
+import LogSOPModal from './LogSOPModal';
 
 interface DogBehaviorWidgetProps {
   familyId: string;
@@ -13,6 +14,8 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
   const [sops, setSops] = useState<DogSOP[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSop, setSelectedSop] = useState<DogSOP | null>(null);
 
   useEffect(() => {
     const fetchSOPs = async () => {
@@ -64,6 +67,32 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
     fetchSOPs();
   }, [familyId]);
 
+  const handleLogClick = (sop: DogSOP) => {
+    setSelectedSop(sop);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveLog = async (logData: Omit<SOPLogEntry, 'id' | 'executedAt' | 'userId' | 'userName' | 'sopId' | 'sopName'>) => {
+    if (!selectedSop) return;
+
+    const newLog = {
+      ...logData,
+      sopId: selectedSop.id,
+      sopName: selectedSop.name,
+      userId: userId,
+      userName: 'Demo User', // In a real app, get from user profile
+    };
+
+    try {
+      await DogBehaviorService.logSOP(familyId, newLog);
+      // Optionally, you could refresh logs here or show a success message
+      console.log('SOP Logged successfully!');
+    } catch (err) {
+      console.error('Failed to save log:', err);
+      // Handle error display to user
+    }
+  };
+
   return (
     <div className="bg-white p-6 rounded-lg shadow-md col-span-1">
       <div className="flex justify-between items-center mb-4">
@@ -84,7 +113,10 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
                     <h3 className="font-bold text-gray-800">{sop.name}</h3>
                     <p className="text-sm text-gray-500 mt-1">{sop.description}</p>
                   </div>
-                  <button className="bg-blue-500 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-blue-600">
+                  <button
+                    onClick={() => handleLogClick(sop)}
+                    className="bg-blue-500 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-blue-600"
+                  >
                     Log
                   </button>
                 </div>
@@ -105,6 +137,12 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
           )}
         </div>
       )}
+      <LogSOPModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        sop={selectedSop}
+        onSave={handleSaveLog}
+      />
     </div>
   );
 };

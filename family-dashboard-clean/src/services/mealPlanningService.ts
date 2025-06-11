@@ -88,6 +88,18 @@ export class MealPlanningService {
     }
   }
 
+  static async deleteFamilyMember(memberId: string): Promise<boolean> {
+    if (!db) return false;
+    
+    try {
+      await deleteDoc(doc(db, 'family_members', memberId));
+      return true;
+    } catch (error) {
+      console.error('Error deleting family member:', error);
+      return false;
+    }
+  }
+
   // Meals Database Management
   static async getMeals(filters?: { cuisine?: string; mealType?: string; healthIndicator?: string }): Promise<Meal[]> {
     if (!db) return [];

@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { DogSOP, SOPLogEntry } from '../types/dogBehavior';
 import { DogBehaviorService } from '../services/dogBehaviorService';
-import { ClipboardDocumentListIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { ClipboardDocumentListIcon, PlusIcon, PencilSquareIcon } from '@heroicons/react/24/outline'; // Added PencilSquareIcon
 import LogSOPModal from './LogSOPModal';
+import EditSOPModal from './EditSOPModal';
 
 interface DogBehaviorWidgetProps {
   familyId: string;
@@ -16,55 +17,29 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSop, setSelectedSop] = useState<DogSOP | null>(null);
+  const [isEditSOPModalOpen, setIsEditSOPModalOpen] = useState(false);
+  // We'll use sopToEdit for editing later. For now, null means 'new SOP'.
+  const [sopToEdit, setSopToEdit] = useState<DogSOP | null>(null);
+
+  const fetchSOPs = async () => {
+    try {
+      setLoading(true);
+      const fetchedSops = await DogBehaviorService.getSOPs(familyId);
+      setSops(fetchedSops);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching SOPs:', err);
+      setError('Failed to load dog behavior protocols.');
+      setSops([]); // Clear SOPs on error
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchSOPs = async () => {
-      try {
-        setLoading(true);
-        // Using sample data for UI development. The actual Firebase call is commented out.
-        const sampleSOPs: DogSOP[] = [
-          {
-            id: 'sop-1',
-            name: 'Leaving the House',
-            description: 'Standard procedure for when everyone leaves the house.',
-            steps: [
-              { id: 'step-1', description: 'Take for a walk (15-20 mins)' },
-              { id: 'step-2', description: 'Prepare Kong toys with treats' },
-              { id: 'step-3', description: 'Close all blinds' },
-              { id: 'step-4', description: 'Turn on white noise machine' },
-              { id: 'step-5', description: 'Ensure dog camera is on' },
-              { id: 'step-6', description: 'Quietly exit the house' },
-            ],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-          {
-            id: 'sop-2',
-            name: 'Returning to the House',
-            description: 'Procedure for when arriving back home.',
-            steps: [
-              { id: 'step-1', description: 'Enter calmly, ignore dog for first 5 mins' },
-              { id: 'step-2', description: 'Check for any accidents (poop/pee)' },
-              { id: 'step-3', description: 'Note down any observations' },
-              { id: 'step-4', description: 'Let dog out for potty break' },
-            ],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-        ];
-        setSops(sampleSOPs);
-        // const fetchedSops = await DogBehaviorService.getSOPs(familyId);
-        // setSops(fetchedSops);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching SOPs:', err);
-        setError('Failed to load dog behavior protocols.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSOPs();
+    if (familyId) {
+      fetchSOPs();
+    }
   }, [familyId]);
 
   const handleLogClick = (sop: DogSOP) => {
@@ -93,11 +68,42 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
     }
   };
 
+  const handleAddNewSOP = () => {
+    setSopToEdit(null); // Clear sopToEdit for new SOP
+    setIsEditSOPModalOpen(true);
+  };
+
+  const handleEditSOP = (sop: DogSOP) => {
+    setSopToEdit(sop); // Set the SOP to be edited
+    setIsEditSOPModalOpen(true);
+  };
+
+  const handleSaveSOP = async (sopData: Omit<DogSOP, 'id' | 'createdAt' | 'updatedAt' | 'familyId'>) => { // familyId is not part of the form data
+    try {
+      if (sopToEdit && sopToEdit.id) {
+        // Editing existing SOP
+        await DogBehaviorService.updateSOP(sopToEdit.id, sopData);
+        console.log('SOP updated successfully!');
+      } else {
+        // Adding new SOP
+        await DogBehaviorService.addSOP(familyId, sopData as Omit<DogSOP, 'id' | 'createdAt' | 'updatedAt'>); // Type assertion for addSOP
+        console.log('New SOP added successfully!');
+      }
+      fetchSOPs(); // Refresh the SOP list
+      setIsEditSOPModalOpen(false);
+      setSopToEdit(null); // Reset sopToEdit
+    } catch (err) {
+      console.error('Failed to save SOP:', err);
+      // Handle error display to user (e.g., set an error state for the modal)
+    }
+  };
+
+
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md col-span-1">
+    <div className="flex flex-col h-full">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold text-gray-700">Dog Behavior Tracker</h2>
-        <button className="p-2 rounded-full hover:bg-gray-100" title="Add new SOP">
+        <button onClick={handleAddNewSOP} className="p-2 rounded-full hover:bg-gray-100" title="Add new SOP">
           <PlusIcon className="h-6 w-6 text-gray-500" />
         </button>
       </div>
@@ -115,9 +121,17 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
                   </div>
                   <button
                     onClick={() => handleLogClick(sop)}
-                    className="bg-blue-500 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-blue-600"
+                    className="flex items-center justify-center w-auto bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-3 rounded-lg text-sm transition duration-150 ease-in-out"
                   >
+                    <ClipboardDocumentListIcon className="h-5 w-5 mr-1 sm:mr-2" />
                     Log
+                  </button>
+                  <button
+                    onClick={() => handleEditSOP(sop)}
+                    className="flex items-center justify-center w-auto bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-3 rounded-lg text-sm transition duration-150 ease-in-out ml-2"
+                    title="Edit SOP"
+                  >
+                    <PencilSquareIcon className="h-5 w-5" />
                   </button>
                 </div>
                 <div className="mt-4">
@@ -142,6 +156,12 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
         onClose={() => setIsModalOpen(false)}
         sop={selectedSop}
         onSave={handleSaveLog}
+      />
+      <EditSOPModal
+        isOpen={isEditSOPModalOpen}
+        onClose={() => setIsEditSOPModalOpen(false)}
+        sopToEdit={sopToEdit}
+        onSave={handleSaveSOP}
       />
     </div>
   );

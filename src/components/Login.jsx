@@ -89,12 +89,21 @@ function Login() {
                 </div>
               </div>
               
-              <button
-                onClick={() => setShowEmailForm(true)}
-                className="group relative flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                Sign in with Email
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => { setShowEmailForm(true); setIsSignUp(false); }}
+                  className="group relative flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  Sign in with Email
+                </button>
+                
+                <button
+                  onClick={() => { setShowEmailForm(true); setIsSignUp(true); }}
+                  className="group relative flex w-full justify-center rounded-md border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  Create New Account
+                </button>
+              </div>
               
               <button
                 onClick={handleDemoMode}

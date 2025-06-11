@@ -10,6 +10,7 @@ import {
   Timestamp,
   doc,
   updateDoc,
+  limit, // Added limit import
 } from 'firebase/firestore';
 import { DogSOP, SOPLogEntry, SOPStep } from '../types/dogBehavior';
 
@@ -17,9 +18,13 @@ const SOP_COLLECTION = 'dogSops';
 const LOG_COLLECTION = 'dogSopLogs';
 
 export const DogBehaviorService = {
-  // Fetch all Standard Operating Procedures for a family
+  // Fetch all Standard Operating Procedures for a family, ordered by name
   async getSOPs(familyId: string): Promise<DogSOP[]> {
-    const q = query(collection(db, SOP_COLLECTION), where('familyId', '==', familyId));
+    const q = query(
+      collection(db, SOP_COLLECTION),
+      where('familyId', '==', familyId),
+      orderBy('name') // Order by name for consistent display
+    );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
@@ -51,12 +56,12 @@ export const DogBehaviorService = {
   },
 
   // Fetch recent SOP log entries
-  async getRecentLogs(familyId: string, limit: number = 20): Promise<SOPLogEntry[]> {
+  async getRecentLogs(familyId: string, count: number = 20): Promise<SOPLogEntry[]> {
     const q = query(
       collection(db, LOG_COLLECTION),
       where('familyId', '==', familyId),
       orderBy('executedAt', 'desc'),
-      where('limit', '==', limit)
+      limit(count) // Correct usage of limit
     );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
@@ -65,4 +70,13 @@ export const DogBehaviorService = {
       executedAt: (doc.data().executedAt as Timestamp).toDate(),
     })) as SOPLogEntry[];
   },
+
+  // Update an existing SOP
+  async updateSOP(sopId: string, sopData: Partial<Omit<DogSOP, 'id' | 'createdAt' | 'familyId'>>): Promise<void> {
+    const sopRef = doc(db, SOP_COLLECTION, sopId);
+    await updateDoc(sopRef, {
+      ...sopData,
+      updatedAt: Timestamp.now(),
+    });
+  }
 };

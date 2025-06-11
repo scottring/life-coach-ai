@@ -69,6 +69,11 @@ export function useAuth() {
   };
 
   const signUpWithEmail = async (email: string, password: string, displayName?: string) => {
+    if (!hasFirebaseCredentials || !auth) {
+      setError('Firebase not configured. Please use demo mode.');
+      return null;
+    }
+    
     try {
       setLoading(true);
       setError(null);

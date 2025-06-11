@@ -5,7 +5,8 @@ import {
   ClockIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  EyeIcon
+  EyeIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 import { MealPlanningService } from '../services/mealPlanningService';
 import { WeeklyMealPlan, FamilyMember } from '../types/mealPlanning';
@@ -19,7 +20,7 @@ interface MealPlannerWidgetProps {
 export default function MealPlannerWidget({ familyId, userId, onExpandToFullView }: MealPlannerWidgetProps) {
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
   const [currentWeekPlan, setCurrentWeekPlan] = useState<WeeklyMealPlan | null>(null);
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
 
@@ -30,69 +31,13 @@ export default function MealPlannerWidget({ familyId, userId, onExpandToFullView
   const loadWidgetData = async () => {
     setLoading(true);
     try {
-      // For demo mode, create sample data
-      if (familyId === 'demo-family-123') {
-        setFamilyMembers([
-          {
-            id: 'member-1',
-            familyId: 'demo-family-123',
-            name: 'Sarah',
-            ageGroup: 'adult',
-            dietaryRestrictions: ['vegetarian'],
-            favoriteFoods: ['pasta', 'salads'],
-            dislikedIngredients: ['mushrooms'],
-            allergens: [],
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            id: 'member-2',
-            familyId: 'demo-family-123',
-            name: 'Mike',
-            ageGroup: 'adult',
-            dietaryRestrictions: [],
-            favoriteFoods: ['grilled chicken', 'tacos'],
-            dislikedIngredients: ['olives'],
-            allergens: [],
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            id: 'member-3',
-            familyId: 'demo-family-123',
-            name: 'Emma',
-            ageGroup: 'child',
-            dietaryRestrictions: [],
-            favoriteFoods: ['mac and cheese', 'chicken nuggets'],
-            dislikedIngredients: ['broccoli'],
-            allergens: [],
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }
-        ]);
+      // Load real Firebase data
+      const members = await MealPlanningService.getFamilyMembers(familyId);
+      setFamilyMembers(members);
 
-        // Create sample week plan
-        const weekStart = getWeekStart(selectedDate);
-        setCurrentWeekPlan({
-          id: 'demo-widget-plan',
-          familyId: 'demo-family-123',
-          weekStartDate: weekStart,
-          weekEndDate: getWeekEnd(weekStart),
-          dailyPlans: generateSampleWeekPlan(weekStart),
-          estimatedCost: 125,
-          generatedBy: 'ai',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      } else {
-        // Load real data
-        const members = await MealPlanningService.getFamilyMembers(familyId);
-        setFamilyMembers(members);
-
-        const weekStart = getWeekStart(selectedDate);
-        const weekPlan = await MealPlanningService.getWeeklyMealPlan(familyId, weekStart);
-        setCurrentWeekPlan(weekPlan);
-      }
+      const weekStart = getWeekStart(selectedDate);
+      const weekPlan = await MealPlanningService.getWeeklyMealPlan(familyId, weekStart);
+      setCurrentWeekPlan(weekPlan);
     } catch (error) {
       console.error('Error loading widget data:', error);
     } finally {
@@ -115,55 +60,8 @@ export default function MealPlannerWidget({ familyId, userId, onExpandToFullView
     return end.toISOString().split('T')[0];
   };
 
-  const generateSampleWeekPlan = (weekStart: string) => {
-    const sampleMeals = {
-      breakfast: ['Overnight Oats', 'Scrambled Eggs', 'Greek Yogurt', 'Pancakes', 'Avocado Toast', 'Smoothie Bowl', 'French Toast'],
-      lunch: ['Turkey Sandwich', 'Caesar Salad', 'Soup & Sandwich', 'Leftover Dinner', 'Quinoa Bowl', 'Wrap & Fruit', 'Pasta Salad'],
-      dinner: ['Pasta Primavera', 'Chicken Tacos', 'Pizza Night', 'Stir-Fry', 'Turkey Burgers', 'Salmon & Veggies', 'Beef Stew']
-    };
-
-    const dailyPlans = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(weekStart);
-      date.setDate(date.getDate() + i);
-      
-      dailyPlans.push({
-        date: date.toISOString().split('T')[0],
-        peopleEating: ['member-1', 'member-2', 'member-3'],
-        meals: [
-          {
-            mealType: 'breakfast' as const,
-            mealId: `meal-${i}-breakfast`,
-            servings: 3,
-            notes: undefined
-          },
-          {
-            mealType: 'lunch' as const,
-            mealId: `meal-${i}-lunch`,
-            servings: 3,
-            notes: undefined
-          },
-          {
-            mealType: 'dinner' as const,
-            mealId: `meal-${i}-dinner`,
-            servings: 3,
-            notes: i === 2 ? 'Family pizza night!' : undefined
-          }
-        ]
-      });
-    }
-    return dailyPlans;
-  };
-
-  const getMealName = (mealId: string, mealType: string, dayIndex: number): string => {
-    const sampleMeals = {
-      breakfast: ['Overnight Oats', 'Scrambled Eggs', 'Greek Yogurt', 'Pancakes', 'Avocado Toast', 'Smoothie Bowl', 'French Toast'],
-      lunch: ['Turkey Sandwich', 'Caesar Salad', 'Soup & Sandwich', 'Leftover Dinner', 'Quinoa Bowl', 'Wrap & Fruit', 'Pasta Salad'],
-      dinner: ['Pasta Primavera', 'Chicken Tacos', 'Pizza Night', 'Stir-Fry', 'Turkey Burgers', 'Salmon & Veggies', 'Beef Stew']
-    };
-    
-    const meals = sampleMeals[mealType as keyof typeof sampleMeals];
-    return meals?.[dayIndex] || mealType.charAt(0).toUpperCase() + mealType.slice(1);
+  const getMealName = (mealType: string): string => {
+    return mealType.charAt(0).toUpperCase() + mealType.slice(1);
   };
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -290,7 +188,7 @@ export default function MealPlannerWidget({ familyId, userId, onExpandToFullView
                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">
-                        {getMealName(meal.mealId, meal.mealType, new Date(selectedDate).getDay())}
+                        {getMealName(meal.mealType)}
                       </p>
                       <p className="text-xs text-gray-500 capitalize">{meal.mealType}</p>
                     </div>
@@ -319,7 +217,7 @@ export default function MealPlannerWidget({ familyId, userId, onExpandToFullView
           <div>
             {currentWeekPlan ? (
               <div className="grid grid-cols-7 gap-1">
-                {currentWeekPlan.dailyPlans.map((day, index) => (
+                {currentWeekPlan.dailyPlans.map((day) => (
                   <div key={day.date} className="text-center">
                     <div className="text-xs font-medium text-gray-500 mb-2">
                       {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
@@ -329,10 +227,10 @@ export default function MealPlannerWidget({ familyId, userId, onExpandToFullView
                         <div 
                           key={mealIndex} 
                           className="w-full h-8 bg-gradient-to-r from-blue-100 to-purple-100 rounded text-xs flex items-center justify-center hover:from-blue-200 hover:to-purple-200 transition-colors cursor-pointer"
-                          title={`${meal.mealType}: ${getMealName(meal.mealId, meal.mealType, index)}`}
+                          title={`${meal.mealType}: ${getMealName(meal.mealType)}`}
                         >
                           <span className="truncate px-1">
-                            {getMealName(meal.mealId, meal.mealType, index).split(' ')[0]}
+                            {getMealName(meal.mealType)}
                           </span>
                         </div>
                       ))}
@@ -349,13 +247,22 @@ export default function MealPlannerWidget({ familyId, userId, onExpandToFullView
               <div className="text-center py-6">
                 <SparklesIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500 text-sm mb-3">No meal plan for this week</p>
-                <button
-                  onClick={onExpandToFullView}
-                  className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
-                >
-                  <SparklesIcon className="h-4 w-4 mr-1" />
-                  Generate Meal Plan
-                </button>
+                <div className="space-y-2">
+                  <button
+                    onClick={onExpandToFullView}
+                    className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 w-full justify-center"
+                  >
+                    <SparklesIcon className="h-4 w-4 mr-1" />
+                    Generate AI Meal Plan
+                  </button>
+                  <button
+                    onClick={onExpandToFullView}
+                    className="inline-flex items-center px-3 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 w-full justify-center"
+                  >
+                    <PlusIcon className="h-4 w-4 mr-1" />
+                    Create Manual Plan
+                  </button>
+                </div>
               </div>
             )}
           </div>

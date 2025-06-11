@@ -3,9 +3,12 @@ import { useAuth } from './hooks/useAuth';
 import FamilyDashboard from './components/FamilyDashboard';
 
 function App() {
-  const { user, loading, signInWithGoogle, signInWithEmail, signOut } = useAuth();
+  const { user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut, error } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
 
   // Demo mode for testing without authentication
@@ -33,7 +36,56 @@ function App() {
           </div>
           
           <div className="mt-8 space-y-6">
+            {error && (
+              <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+            
+            <div className="text-center mb-4">
+              <div className="flex rounded-md border border-gray-200 p-1">
+                <button
+                  type="button"
+                  onClick={() => setIsSignUp(false)}
+                  className={`flex-1 rounded py-2 text-sm font-medium ${
+                    !isSignUp 
+                      ? 'bg-blue-600 text-white' 
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSignUp(true)}
+                  className={`flex-1 rounded py-2 text-sm font-medium ${
+                    isSignUp 
+                      ? 'bg-blue-600 text-white' 
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Sign Up
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-4">
+              {isSignUp && (
+                <div>
+                  <label htmlFor="displayName" className="block text-sm font-medium text-gray-700">
+                    Full Name
+                  </label>
+                  <input
+                    id="displayName"
+                    name="displayName"
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  />
+                </div>
+              )}
+              
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                   Email address
@@ -44,6 +96,7 @@ function App() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  required
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
                 />
               </div>
@@ -58,15 +111,52 @@ function App() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
                 />
+                {isSignUp && (
+                  <p className="mt-1 text-xs text-gray-500">At least 6 characters</p>
+                )}
               </div>
               
+              {isSignUp && (
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  />
+                </div>
+              )}
+              
               <button
-                onClick={() => signInWithEmail(email, password)}
-                className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+                onClick={async () => {
+                  try {
+                    if (isSignUp) {
+                      if (password !== confirmPassword) {
+                        alert("Passwords don't match");
+                        return;
+                      }
+                      await signUpWithEmail(email, password, displayName);
+                    } else {
+                      await signInWithEmail(email, password);
+                    }
+                  } catch (error) {
+                    console.error('Authentication error:', error);
+                  }
+                }}
+                disabled={loading}
+                className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:bg-blue-300"
               >
-                Sign In
+                {loading ? (isSignUp ? 'Creating account...' : 'Signing in...') : (isSignUp ? 'Create Account' : 'Sign In')}
               </button>
             </div>
             

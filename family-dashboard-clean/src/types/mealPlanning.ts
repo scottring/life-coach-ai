@@ -3,7 +3,7 @@
 export type RatingType = 'loved' | 'liked' | 'neutral' | 'disliked' | 'hated';
 export type HealthIndicator = 'healthy' | 'neutral' | 'unhealthy';
 export type FunFactor = 1 | 2 | 3 | 4 | 5; // 1 = boring, 5 = super fun
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type MealType = 'breakfast' | 'am-snack' | 'lunch' | 'pm-snack' | 'dinner' | 'dessert';
 export type DietaryRestriction = 'vegetarian' | 'vegan' | 'gluten-free' | 'dairy-free' | 'nut-free' | 'low-carb' | 'keto' | 'paleo';
 
 // Enhanced Family Member with meal preferences

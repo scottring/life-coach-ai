@@ -1,36 +1,26 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { useFirebaseAuth } from '../hooks/useFirebaseAuth';
 
 function Login() {
-  const [loading, setLoading] = useState(false);
+  const { signInWithEmail, signUpWithEmail, signInWithGoogle, loading: authLoading, error: authError } = useFirebaseAuth();
   const [error, setError] = useState(null);
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+
+  const loading = authLoading;
 
   const handleGoogleLogin = async () => {
     try {
-      setLoading(true);
       setError(null);
-      
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly',
-          redirectTo: `${window.location.origin}/dashboard`
-        }
-      });
-      
-      if (error) throw error;
-      
+      await signInWithGoogle();
     } catch (error) {
-      console.error('Login error:', error);
-      setError("Google login not configured. Try email login or use demo mode.");
+      console.error('Google login error:', error);
+      setError("Google login failed. Try email login instead.");
       setShowEmailForm(true);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -43,75 +33,26 @@ function Login() {
     }
     
     try {
-      setLoading(true);
       setError(null);
       
       if (isSignUp) {
         // Sign up new user
-        console.log('Attempting signup with:', { email, password: '***' });
-        
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`
-          }
-        });
-        
-        console.log('Full signup response:', { 
-          data, 
-          error,
-          user: data?.user,
-          session: data?.session 
-        });
-        
-        if (error) {
-          console.error('Signup error:', error);
-          throw error;
-        }
-        
-        if (data.user && !data.session) {
-          console.log('User created but no session - email confirmation required');
-          setError("Check your email for a confirmation link to complete signup.");
-        } else if (data.user && data.session) {
-          console.log('User created and logged in immediately:', data.user);
-        } else {
-          console.log('Unexpected signup response:', data);
-        }
+        await signUpWithEmail(email, password, displayName);
       } else {
         // Sign in existing user
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        
-        if (error) throw error;
+        await signInWithEmail(email, password);
       }
-      
     } catch (error) {
-      console.error('Email auth error:', error);
-      setError(error.message || `An error occurred during ${isSignUp ? 'signup' : 'login'}`);
-    } finally {
-      setLoading(false);
+      console.error('Auth error:', error);
+      setError(error.message || 'Authentication failed');
     }
   };
 
   const handleDemoMode = () => {
-    // For demo purposes, just redirect to dashboard
-    // The app will use mock data since no real user is authenticated
+    // For demo purposes, create a temporary demo user
+    console.log('Demo mode activated - using demo data');
+    // You could set up demo auth here if needed
     window.location.href = '/dashboard';
-  };
-
-  const testConnection = async () => {
-    try {
-      const { data, error } = await supabase.auth.getSession();
-      console.log('Current session:', { data, error });
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log('Current user:', user);
-    } catch (err) {
-      console.error('Connection test failed:', err);
-    }
   };
 
   return (
@@ -123,9 +64,9 @@ function Login() {
         </div>
         
         <div className="mt-8 space-y-6">
-          {error && (
+          {(error || authError) && (
             <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
-              {error}
+              {error || authError}
             </div>
           )}
           
@@ -190,6 +131,22 @@ function Login() {
                   </button>
                 </div>
               </div>
+
+              {isSignUp && (
+                <div>
+                  <label htmlFor="displayName" className="block text-sm font-medium text-gray-700">
+                    Full Name
+                  </label>
+                  <input
+                    id="displayName"
+                    name="displayName"
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  />
+                </div>
+              )}
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -261,7 +218,7 @@ function Login() {
           )}
           
           <div className="text-center text-xs text-gray-500">
-            <p>Demo mode uses mock data to showcase features</p>
+            <p>Demo mode uses Firebase with mock data to showcase features</p>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
-import { FamilyAdapter } from '../adapters/FamilyAdapter';
+import { FirebaseFamilyAdapter as FamilyAdapter } from '../adapters/FirebaseFamilyAdapter';
 
 const FamilyContext = createContext();
 

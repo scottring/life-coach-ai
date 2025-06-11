@@ -1,52 +1,20 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { useFirebaseAuth } from './useFirebaseAuth';
 
 export function useAuthState() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, signOut, error } = useFirebaseAuth();
 
-  useEffect(() => {
-    // Get the current user session
-    const getSession = async () => {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-        }
-        
-        setUser(data?.session?.user || null);
-      } catch (error) {
-        console.error('Error in getSession:', error);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Transform Firebase user to match expected format
+  const transformedUser = user ? {
+    id: user.uid,
+    email: user.email,
+    name: user.displayName || user.email?.split('@')[0] || 'User',
+    photoURL: user.photoURL
+  } : null;
 
-    getSession();
-
-    // Listen for auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user || null);
-        setLoading(false);
-      }
-    );
-
-    // Clean up subscription on unmount
-    return () => {
-      authListener?.subscription?.unsubscribe();
-    };
-  }, []);
-
-  const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
+  return { 
+    user: transformedUser, 
+    loading, 
+    signOut,
+    error 
   };
-
-  return { user, loading, signOut };
 }

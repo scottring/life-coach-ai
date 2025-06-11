@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { auth } from '../lib/firebaseClient';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 // Create context object
 export const AppContext = createContext();
@@ -24,50 +25,22 @@ export const AppContextProvider = ({ children }) => {
   
   // Load user information on mount
   useEffect(() => {
-    const loadUser = async () => {
-      setLoading(true);
-      
-      try {
-        // Check for Supabase user session
-        const { data, error } = await supabase.auth.getSession();
-        
-        if (error) throw error;
-        
-        if (data?.session?.user) {
-          // Real user found
-          setContext(prev => ({
-            ...prev,
-            user: data.session.user
-          }));
-        } else {
-          // User not authenticated
-          setContext(prev => ({
-            ...prev,
-            user: null
-          }));
-        }
-      } catch (error) {
-        console.error('Error loading user:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    setLoading(true);
     
-    loadUser();
+    // Set up Firebase auth state listener
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setContext(prev => ({
+        ...prev,
+        user: user ? {
+          id: user.uid,
+          email: user.email,
+          name: user.displayName || user.email?.split('@')[0] || 'User'
+        } : null
+      }));
+      setLoading(false);
+    });
     
-    // Set up auth state listener
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setContext(prev => ({
-          ...prev,
-          user: session?.user || null
-        }));
-      }
-    );
-    
-    return () => {
-      authListener?.subscription?.unsubscribe();
-    };
+    return unsubscribe;
   }, []);
   
   // Update user context
@@ -94,13 +67,16 @@ export const AppContextProvider = ({ children }) => {
   
   // Logout user
   const logout = async () => {
-    await supabase.auth.signOut();
-    
-    // Reset to initial state
-    setContext({
-      ...initialContextState,
-      user: null
-    });
+    try {
+      await signOut(auth);
+      // Reset to initial state
+      setContext({
+        ...initialContextState,
+        user: null
+      });
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
   
   return (

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from './hooks/useAuth';
-import EnhancedMealPlanner from './components/EnhancedMealPlanner';
+import FamilyDashboard from './components/FamilyDashboard';
 
 function App() {
   const { user, loading, signInWithGoogle, signInWithEmail, signOut } = useAuth();
@@ -130,7 +130,7 @@ function App() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <EnhancedMealPlanner familyId={currentFamilyId} userId={currentUser.id} />
+        <FamilyDashboard familyId={currentFamilyId} userId={currentUser.id} />
       </main>
     </div>
   );

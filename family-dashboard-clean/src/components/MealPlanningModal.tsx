@@ -552,6 +552,18 @@ export default function MealPlanningModal({ isOpen, onClose, familyId, userId }:
           </div>
         </div>
       </div>
+
+      {/* Family Preferences Modal */}
+      {showPreferences && (
+        <FamilyPreferencesModal
+          isOpen={showPreferences}
+          onClose={() => {
+            setShowPreferences(false);
+            loadPlannerData(); // Refresh data when modal closes
+          }}
+          familyId={familyId}
+        />
+      )}
     </div>
   );
 }

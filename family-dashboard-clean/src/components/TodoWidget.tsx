@@ -22,6 +22,7 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
     loading,
     error,
     connectTodoist,
+    disconnectTodoist,
     setSelectedProject,
     createTask,
     completeTask,
@@ -235,6 +236,7 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
             <button
               onClick={() => {
                 if (window.confirm('Are you sure you want to disconnect from Todoist?')) {
+                  disconnectTodoist();
                   setShowSettings(false);
                 }
               }}

@@ -42,7 +42,6 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
 
   return (
     <div className="p-4 lg:p-6 bg-gray-100 min-h-screen">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Family Dashboard</h1>
       <ResponsiveGridLayout
         className="layout"
         layouts={layouts}

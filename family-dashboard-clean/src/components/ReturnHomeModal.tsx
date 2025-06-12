@@ -39,7 +39,12 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
     setIsSubmitting(true);
 
     try {
+      // Complete Wyze monitoring first
+      await DogBehaviorService.completeWyzeMonitoring(session.id);
+      
+      // Then save return observations
       await DogBehaviorService.completeLeaveSession(session.id, observations);
+      
       onSessionCompleted();
       onClose();
     } catch (error) {
@@ -79,6 +84,25 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
         {/* Form Content */}
         <form onSubmit={handleSubmit} className="p-6" style={{ background: 'white' }}>
           <div className="space-y-6">
+            {/* Departure Summary */}
+            {session.departureParameters && session.departureParameters.length > 0 && (
+              <div className="apple-card p-4" style={{ background: 'rgba(0, 122, 255, 0.05)' }}>
+                <h3 className="apple-subtitle text-gray-800 mb-3">What You Did Before Leaving</h3>
+                <div className="flex flex-wrap gap-2">
+                  {session.departureParameters
+                    .filter(param => param.isSelected)
+                    .map(param => (
+                      <span key={param.parameterId} className="inline-flex items-center px-3 py-1 rounded-full apple-caption"
+                            style={{ background: 'rgba(0, 122, 255, 0.1)', color: 'var(--apple-blue)' }}>
+                        {param.parameterName}
+                        {param.quantity && param.quantity > 1 && (
+                          <span className="ml-1 text-xs">×{param.quantity}</span>
+                        )}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
             {/* Barking Section */}
             <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
               <h3 className="apple-subtitle text-gray-800 mb-3">Barking Behavior</h3>

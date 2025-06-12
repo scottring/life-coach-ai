@@ -1,0 +1,20 @@
+{
+  "name": "wyze-proxy-api",
+  "version": "1.0.0",
+  "description": "Proxy API for Wyze camera integration to bypass CORS restrictions",
+  "main": "wyze-proxy.js",
+  "scripts": {
+    "start": "node wyze-proxy.js",
+    "dev": "nodemon wyze-proxy.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["wyze", "proxy", "api", "cors"],
+  "author": "",
+  "license": "ISC"
+}

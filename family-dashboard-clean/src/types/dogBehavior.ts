@@ -6,6 +6,18 @@ export interface SOPStep {
   isCompleted?: boolean; // Used during logging an SOP instance
 }
 
+export interface DepartureParameter {
+  id: string;
+  name: string;
+  icon: string; // emoji or icon name
+  category: 'comfort' | 'activity' | 'medication' | 'environment' | 'custom';
+  isQuantifiable: boolean; // true if it has a quantity (like pills, treats)
+  maxQuantity?: number;
+  unit?: string; // 'pills', 'treats', 'minutes', etc.
+  color: string; // for button styling
+  isActive: boolean; // can be toggled on/off
+}
+
 export interface DogSOP {
   id: string;
   name: string; // e.g., "Leaving the House", "Morning Routine"
@@ -32,6 +44,28 @@ export interface SOPLogEntry {
   sessionId?: string; // Links to the LeaveSessionLog if this is a leaving SOP
 }
 
+export interface WyzeBarkEvent {
+  timestamp: Date;
+  duration: number; // seconds
+  loudness: number; // 1-10 scale
+  confidence: number; // detection confidence 0-1
+}
+
+export interface WyzeMotionEvent {
+  timestamp: Date;
+  duration: number; // seconds
+  intensity: number; // 1-10 movement intensity scale
+  location?: string; // room/area if available
+}
+
+export interface DepartureParameterLog {
+  parameterId: string;
+  parameterName: string;
+  isSelected: boolean;
+  quantity?: number;
+  notes?: string;
+}
+
 export interface LeaveSessionLog {
   id: string;
   familyId: string;
@@ -39,8 +73,20 @@ export interface LeaveSessionLog {
   returnTime?: Date;
   isActive: boolean; // true if still away, false if returned
   
-  // Pre-departure SOP execution
+  // Pre-departure parameters and SOP
+  departureParameters: DepartureParameterLog[];
   departureSopLogId?: string; // Links to SOPLogEntry for leaving routine
+  
+  // Wyze camera monitoring data
+  wyzeMonitoring?: {
+    barkEvents: WyzeBarkEvent[];
+    motionEvents: WyzeMotionEvent[];
+    totalBarkingMinutes: number;
+    averageLoudness: number;
+    totalMotionMinutes: number;
+    anxietyScore: number; // 1-10 calculated from frequency and intensity
+    calmPeriods: { start: Date; end: Date }[]; // periods with no activity
+  };
   
   // Return observations
   returnObservations?: {

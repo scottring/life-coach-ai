@@ -11,6 +11,9 @@
   "functions": {
     "api/n8n/*.js": {
       "maxDuration": 30
+    },
+    "api/wyze-proxy.js": {
+      "maxDuration": 30
     }
   }
 }

@@ -203,9 +203,9 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}></div>
       
-      <div className="relative apple-card w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ background: '#f5f5f7' }}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200/50 sticky top-0" 
+      <div className="relative apple-card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ background: '#f5f5f7' }}>
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200/50 flex-shrink-0" 
              style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
           <div className="flex items-center">
             <CameraIcon className="h-6 w-6 mr-3 sf-icon" style={{ color: 'var(--apple-blue)' }} />
@@ -219,8 +219,8 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6" style={{ background: 'white' }}>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-6" style={{ background: 'white' }}>
           {/* Connection Status */}
           {isConnected && (
             <div className="mb-6 p-4 rounded-xl flex items-center" 
@@ -563,8 +563,8 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
           )}
         </div>
 
-        {/* Footer */}
-        <div className="sticky bottom-0 flex justify-end p-6 border-t border-gray-200/50" 
+        {/* Fixed Footer */}
+        <div className="flex justify-end p-6 border-t border-gray-200/50 flex-shrink-0" 
              style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
           <button
             onClick={onClose}

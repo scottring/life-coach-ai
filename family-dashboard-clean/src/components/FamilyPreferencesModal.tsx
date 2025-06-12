@@ -171,10 +171,10 @@ export default function FamilyPreferencesModal({ isOpen, onClose, familyId }: Fa
       <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
         
-        <div className="inline-block align-bottom apple-card rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle w-full max-w-4xl" style={{ background: '#f5f5f7' }}>
-          <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+        <div className="inline-block align-bottom apple-card rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle w-full max-w-4xl max-h-[80vh] flex flex-col" style={{ background: '#f5f5f7' }}>
+          {/* Fixed Header */}
+          <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4 flex-shrink-0" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+            <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <UserGroupIcon className="h-6 w-6 mr-3 sf-icon" style={{ color: 'var(--apple-blue)' }} />
                 <h2 className="apple-title text-xl text-gray-800">Family Preferences</h2>
@@ -188,7 +188,8 @@ export default function FamilyPreferencesModal({ isOpen, onClose, familyId }: Fa
             </div>
           </div>
           
-          <div className="px-4 pb-4 sm:p-6" style={{ background: 'white' }}>
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto px-4 pb-4 sm:p-6" style={{ background: 'white' }}>
             {/* Content */}
             <div className="space-y-6">
               {/* Add Family Member Button */}

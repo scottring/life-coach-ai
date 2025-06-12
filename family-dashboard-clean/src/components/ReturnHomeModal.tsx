@@ -60,12 +60,12 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
   const minutesAway = Math.floor((timeAway % (1000 * 60 * 60)) / (1000 * 60));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}></div>
       
-      <div className="relative apple-card w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ background: '#f5f5f7' }}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200/50 sticky top-0" 
+      <div className="relative w-full h-full flex flex-col" style={{ background: '#f5f5f7' }}>
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200/50 flex-shrink-0" 
              style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
           <div className="flex items-center">
             <HomeIcon className="h-6 w-6 mr-3 sf-icon" style={{ color: 'var(--apple-green)' }} />
@@ -81,8 +81,9 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
           </button>
         </div>
 
-        {/* Form Content */}
-        <form onSubmit={handleSubmit} className="p-6" style={{ background: 'white' }}>
+        {/* Scrollable Form Content */}
+        <div className="flex-1 overflow-y-auto" style={{ background: 'white' }}>
+          <form onSubmit={handleSubmit} className="p-8 max-w-4xl mx-auto">
           <div className="space-y-6">
             {/* Departure Summary */}
             {session.departureParameters && session.departureParameters.length > 0 && (
@@ -104,7 +105,7 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
               </div>
             )}
             {/* Barking Section */}
-            <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-4">
               <h3 className="apple-subtitle text-gray-800 mb-3">Barking Behavior</h3>
               
               <div className="space-y-3">
@@ -163,7 +164,7 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
             </div>
 
             {/* Crate Section */}
-            <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-4">
               <h3 className="apple-subtitle text-gray-800 mb-3">Crate Status</h3>
               
               <div className="space-y-3">
@@ -203,7 +204,7 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
             </div>
 
             {/* Accidents Section */}
-            <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-4">
               <h3 className="apple-subtitle text-gray-800 mb-3">Accidents</h3>
               
               <div className="space-y-3">
@@ -269,7 +270,7 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
             </div>
 
             {/* Destructive Behavior Section */}
-            <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-4">
               <h3 className="apple-subtitle text-gray-800 mb-3">Destructive Behavior</h3>
               
               <div className="space-y-3">
@@ -335,7 +336,7 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
             </div>
 
             {/* Food & Water Section */}
-            <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-4">
               <h3 className="apple-subtitle text-gray-800 mb-3">Food & Water</h3>
               
               <div className="grid grid-cols-2 gap-4">
@@ -380,7 +381,7 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
             </div>
 
             {/* Overall Mood Section */}
-            <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-4">
               <h3 className="apple-subtitle text-gray-800 mb-3">Overall Mood Upon Return</h3>
               
               <select
@@ -430,7 +431,8 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
               {isSubmitting ? 'Saving...' : 'Complete Session'}
             </button>
           </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );

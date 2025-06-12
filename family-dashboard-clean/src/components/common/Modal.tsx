@@ -22,7 +22,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" />
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
         </Transition.Child>
 
         <div className="fixed inset-0 z-10 overflow-y-auto">
@@ -36,24 +36,22 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <Dialog.Panel className="relative transform overflow-hidden rounded-2xl bg-glass border border-glass shadow-glass backdrop-blur-xl text-left transition-all sm:my-8 sm:w-full sm:max-w-lg">
-                <div className="absolute top-0 right-0 pt-4 pr-4 z-10">
+              <Dialog.Panel className="relative transform overflow-hidden apple-card text-left transition-all sm:my-8 sm:w-full sm:max-w-lg" style={{ background: '#f5f5f7' }}>
+                <div className="flex items-center justify-between p-6 border-b border-gray-200/50" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+                  <Dialog.Title as="h3" className="apple-title text-xl text-gray-800">
+                    {title}
+                  </Dialog.Title>
                   <button
                     type="button"
-                    className="rounded-md bg-white/10 text-gray-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/50"
+                    className="text-gray-600 hover:text-gray-800 apple-transition p-2 rounded-lg hover:bg-gray-100/50"
                     onClick={onClose}
                   >
                     <span className="sr-only">Close</span>
-                    <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+                    <XMarkIcon className="h-6 w-6 sf-icon" aria-hidden="true" />
                   </button>
                 </div>
-                <div className="p-6">
-                  <Dialog.Title as="h3" className="text-xl font-semibold leading-6 text-white">
-                    {title}
-                  </Dialog.Title>
-                  <div className="mt-4">
-                    {children}
-                  </div>
+                <div className="p-6" style={{ background: 'white' }}>
+                  {children}
                 </div>
               </Dialog.Panel>
             </Transition.Child>

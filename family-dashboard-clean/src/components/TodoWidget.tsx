@@ -81,45 +81,47 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
         )}
         
         {showSettings ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
               <input
                 type="password"
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
                 placeholder="Todoist API token"
-                className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                onKeyPress={(e) => e.key === 'Enter' && handleConnect()}
+                className="apple-input w-full px-3 py-2 apple-caption text-gray-800"
+                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
               />
             </div>
             <div className="flex space-x-2">
               <button
                 onClick={handleConnect}
                 disabled={loading}
-                className="flex-1 px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:bg-blue-300"
+                className="apple-button flex-1 px-3 py-2 text-white apple-caption font-medium"
+                style={{ background: loading ? 'rgba(0, 122, 255, 0.5)' : 'var(--apple-blue)' }}
               >
                 {loading ? 'Connecting...' : 'Connect'}
               </button>
               <button
                 onClick={() => setShowSettings(false)}
-                className="px-2 py-1 border border-gray-300 text-gray-600 rounded text-xs hover:bg-gray-50"
+                className="apple-button px-3 py-2 text-gray-600 apple-caption"
               >
                 Cancel
               </button>
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="apple-caption text-gray-600/80">
               Get your API token from Todoist Settings → Integrations
             </div>
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center">
-            <div className="text-gray-400 mb-2">
-              <Cog6ToothIcon className="h-8 w-8 mx-auto" />
+            <div className="text-gray-400/60 mb-3">
+              <Cog6ToothIcon className="h-8 w-8 mx-auto sf-icon" />
             </div>
-            <p className="text-sm text-gray-600 mb-3">Connect to Todoist to sync your tasks</p>
+            <p className="apple-body text-gray-700/80 mb-4">Connect to Todoist to sync your tasks</p>
             <button
               onClick={() => setShowSettings(true)}
-              className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+              className="apple-button px-4 py-2 text-blue-600 apple-caption"
+              style={{ background: 'rgba(0, 122, 255, 0.1)' }}
             >
               Connect Todoist
             </button>
@@ -132,47 +134,48 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
   return (
     <div className="h-full flex flex-col">
       {/* Header with settings */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
-          <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-          <span className="text-xs text-gray-600">
+          <div className="w-2 h-2 rounded-full mr-2" style={{ background: 'var(--apple-green)' }}></div>
+          <span className="apple-caption text-gray-700/80">
             {tasks.length} task{tasks.length !== 1 ? 's' : ''}
           </span>
         </div>
         <div className="flex items-center space-x-1">
           <button
             onClick={() => setShowAddTask(true)}
-            className="p-1 text-gray-400 hover:text-blue-600"
+            className="p-2 text-gray-600/60 hover:text-blue-600 apple-transition rounded-lg hover:bg-blue-500/10"
             title="Add task"
           >
-            <PlusIcon className="h-4 w-4" />
+            <PlusIcon className="h-4 w-4 sf-icon" />
           </button>
           <button
             onClick={() => setShowSettings(true)}
-            className="p-1 text-gray-400 hover:text-gray-600"
+            className="p-2 text-gray-600/60 hover:text-gray-800 apple-transition rounded-lg hover:bg-gray-500/10"
             title="Settings"
           >
-            <Cog6ToothIcon className="h-4 w-4" />
+            <Cog6ToothIcon className="h-4 w-4 sf-icon" />
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="p-2 mb-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+        <div className="p-3 mb-3 rounded-xl border apple-caption text-red-600" 
+             style={{ background: 'rgba(255, 59, 48, 0.1)', borderColor: 'rgba(255, 59, 48, 0.2)' }}>
           {error}
         </div>
       )}
 
       {/* Project selector */}
       {projects.length > 1 && (
-        <div className="mb-3">
+        <div className="mb-4">
           <select
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
-            className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="apple-input w-full px-3 py-2 apple-caption text-white"
           >
             {projects.map(project => (
-              <option key={project.id} value={project.id}>
+              <option key={project.id} value={project.id} className="text-gray-800">
                 {project.name}
               </option>
             ))}
@@ -182,21 +185,22 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
 
       {/* Add task form */}
       {showAddTask && (
-        <div className="mb-3 p-2 bg-gray-50 rounded">
+        <div className="mb-4 p-4 rounded-xl" style={{ background: 'rgba(0, 0, 0, 0.05)' }}>
           <input
             type="text"
             value={newTaskContent}
             onChange={(e) => setNewTaskContent(e.target.value)}
             placeholder="What needs to be done?"
-            className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 mb-2"
-            onKeyPress={(e) => e.key === 'Enter' && handleAddTask()}
+            className="apple-input w-full px-3 py-2 apple-caption text-gray-800 mb-3"
+            onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
             autoFocus
           />
           <div className="flex space-x-2">
             <button
               onClick={handleAddTask}
               disabled={!newTaskContent.trim() || loading}
-              className="flex-1 px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:bg-green-300"
+              className="apple-button flex-1 px-3 py-2 text-white apple-caption font-medium"
+              style={{ background: !newTaskContent.trim() || loading ? 'rgba(52, 199, 89, 0.5)' : 'var(--apple-green)' }}
             >
               Add Task
             </button>
@@ -205,7 +209,7 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
                 setShowAddTask(false);
                 setNewTaskContent('');
               }}
-              className="px-2 py-1 border border-gray-300 text-gray-600 rounded text-xs hover:bg-gray-50"
+              className="apple-button px-3 py-2 text-gray-600 apple-caption"
             >
               Cancel
             </button>
@@ -215,21 +219,22 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
 
       {/* Settings panel */}
       {showSettings && (
-        <div className="mb-3 p-2 bg-gray-50 rounded">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-700">Todoist Settings</span>
+        <div className="mb-4 p-4 rounded-xl" style={{ background: 'rgba(0, 0, 0, 0.05)' }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="apple-subtitle text-gray-800">Todoist Settings</span>
             <button
               onClick={() => setShowSettings(false)}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-500 hover:text-gray-700 apple-transition p-1 rounded-lg hover:bg-gray-500/10"
             >
               ×
             </button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <button
               onClick={refreshTasks}
               disabled={loading}
-              className="w-full px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 disabled:bg-blue-300"
+              className="apple-button w-full px-3 py-2 text-white apple-caption font-medium"
+              style={{ background: loading ? 'rgba(0, 122, 255, 0.5)' : 'var(--apple-blue)' }}
             >
               {loading ? 'Refreshing...' : 'Refresh Tasks'}
             </button>
@@ -240,7 +245,8 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
                   setShowSettings(false);
                 }
               }}
-              className="w-full px-2 py-1 border border-red-300 text-red-600 rounded text-xs font-medium hover:bg-red-50"
+              className="apple-button w-full px-3 py-2 apple-caption font-medium"
+              style={{ background: 'rgba(255, 59, 48, 0.1)', color: 'var(--apple-red)', border: '1px solid rgba(255, 59, 48, 0.2)' }}
             >
               Disconnect
             </button>
@@ -251,36 +257,37 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
       {/* Tasks list */}
       <div className="flex-1 overflow-y-auto">
         {loading && tasks.length === 0 ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <div className="flex items-center justify-center py-6">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-blue-600"></div>
           </div>
         ) : tasks.length > 0 ? (
           <div className="space-y-2">
             {tasks.slice(0, 8).map(task => (
-              <div key={task.id} className="group flex items-start space-x-2 p-2 hover:bg-gray-50 rounded">
+              <div key={task.id} className="group flex items-start space-x-3 p-3 rounded-xl apple-transition hover:bg-white/50">
                 <button
                   onClick={() => handleCompleteTask(task.id)}
-                  className="mt-0.5 p-0.5 text-gray-400 hover:text-green-600"
+                  className="mt-0.5 p-1 text-gray-400/60 hover:text-green-600 apple-transition rounded-lg hover:bg-green-500/10"
                 >
-                  <CheckCircleIcon className="h-4 w-4" />
+                  <CheckCircleIcon className="h-4 w-4 sf-icon" />
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center">
-                    <p className="text-xs text-gray-900 truncate">{task.content}</p>
+                    <p className="apple-caption text-gray-800 truncate">{task.content}</p>
                     {task.priority > 1 && (
-                      <span className="ml-1 text-xs">{getPriorityIcon(task.priority)}</span>
+                      <span className="ml-2 text-sm">{getPriorityIcon(task.priority)}</span>
                     )}
                   </div>
                   {task.due && (
-                    <div className="flex items-center mt-1 text-xs text-gray-500">
-                      <ClockIcon className="h-3 w-3 mr-1" />
+                    <div className="flex items-center mt-1 apple-caption text-gray-600/80">
+                      <ClockIcon className="h-3 w-3 mr-1 sf-icon" />
                       {task.due.string}
                     </div>
                   )}
                   {task.labels.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="flex flex-wrap gap-1 mt-2">
                       {task.labels.slice(0, 2).map(label => (
-                        <span key={label} className="inline-block px-1 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
+                        <span key={label} className="inline-block px-2 py-1 rounded-full apple-caption"
+                              style={{ background: 'rgba(0, 122, 255, 0.1)', color: 'var(--apple-blue)' }}>
                           {label}
                         </span>
                       ))}
@@ -290,19 +297,19 @@ export default function TodoWidget({ familyId, userId }: TodoWidgetProps) {
               </div>
             ))}
             {tasks.length > 8 && (
-              <div className="flex items-center justify-center py-2 text-xs text-gray-500">
-                <ChevronRightIcon className="h-3 w-3 mr-1" />
+              <div className="flex items-center justify-center py-3 apple-caption text-gray-600/60">
+                <ChevronRightIcon className="h-3 w-3 mr-1 sf-icon" />
                 {tasks.length - 8} more tasks in Todoist
               </div>
             )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <CheckCircleIcon className="h-8 w-8 text-gray-300 mb-2" />
-            <p className="text-sm text-gray-600 mb-2">All tasks completed!</p>
+            <CheckCircleIcon className="h-8 w-8 text-gray-400/40 mb-3 sf-icon" />
+            <p className="apple-body text-gray-700/80 mb-3">All tasks completed!</p>
             <button
               onClick={() => setShowAddTask(true)}
-              className="text-xs text-blue-600 hover:text-blue-700"
+              className="apple-caption text-blue-600 hover:text-blue-700 apple-transition"
             >
               Add a new task
             </button>

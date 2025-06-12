@@ -31,6 +31,7 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
   const [showPreferences, setShowPreferences] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState<{meal: any, mealName: string, date: string} | null>(null);
   const [availabilityGrid, setAvailabilityGrid] = useState<{[memberId: string]: {[dateKey: string]: boolean}}>({});
+  const [cookingMode, setCookingMode] = useState<{isActive: boolean, currentStep: number, meal: any} | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -250,59 +251,63 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black bg-opacity-50" onClick={onClose}></div>
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}></div>
       
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-6xl h-[85vh] flex flex-col">
+      <div className="relative apple-card w-full max-w-6xl h-[85vh] flex flex-col" style={{ background: '#f5f5f7' }}>
         {/* Fixed Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200/50 flex-shrink-0" 
+             style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
           <div className="flex items-center">
-            <CalendarIcon className="h-6 w-6 text-blue-600 mr-2" />
-            <h2 className="text-xl font-bold text-gray-900">Meal Planner</h2>
+            <CalendarIcon className="h-6 w-6 mr-3 sf-icon" style={{ color: 'var(--apple-blue)' }} />
+            <h2 className="apple-title text-xl text-gray-800">Meal Planner</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <XMarkIcon className="w-6 h-6" />
+          <button onClick={onClose} className="text-gray-600 hover:text-gray-800 apple-transition p-2 rounded-lg hover:bg-gray-100/50">
+            <XMarkIcon className="w-6 h-6 sf-icon" />
           </button>
         </div>
 
         {/* Fixed Tabs */}
-        <div className="flex border-b border-gray-200 px-6 flex-shrink-0">
+        <div className="flex border-b border-gray-200/50 px-6 flex-shrink-0" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
           <button
             onClick={() => setActiveTab('preferences')}
-            className={`px-4 py-3 text-sm font-medium border-b-2 ${
+            className={`px-4 py-3 apple-caption font-medium border-b-2 apple-transition ${
               activeTab === 'preferences'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
             }`}
+            style={{ borderBottomColor: activeTab === 'preferences' ? 'var(--apple-blue)' : 'transparent' }}
           >
-            <UserGroupIcon className="h-4 w-4 inline mr-2" />
+            <UserGroupIcon className="h-4 w-4 inline mr-2 sf-icon" />
             Family Members
           </button>
           <button
             onClick={() => setActiveTab('availability')}
-            className={`px-4 py-3 text-sm font-medium border-b-2 ${
+            className={`px-4 py-3 apple-caption font-medium border-b-2 apple-transition ${
               activeTab === 'availability'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
             }`}
+            style={{ borderBottomColor: activeTab === 'availability' ? 'var(--apple-blue)' : 'transparent' }}
           >
-            <ClockIcon className="h-4 w-4 inline mr-2" />
+            <ClockIcon className="h-4 w-4 inline mr-2 sf-icon" />
             Availability
           </button>
           <button
             onClick={() => setActiveTab('planner')}
-            className={`px-4 py-3 text-sm font-medium border-b-2 ${
+            className={`px-4 py-3 apple-caption font-medium border-b-2 apple-transition ${
               activeTab === 'planner'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
             }`}
+            style={{ borderBottomColor: activeTab === 'planner' ? 'var(--apple-blue)' : 'transparent' }}
           >
-            <CalendarIcon className="h-4 w-4 inline mr-2" />
+            <CalendarIcon className="h-4 w-4 inline mr-2 sf-icon" />
             Meal Planner
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6" style={{ background: 'white' }}>
           {loading ? (
             <div className="flex items-center justify-center h-32">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -557,20 +562,21 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                 <div className="flex items-center space-x-3">
                   <button
                     onClick={() => navigateWeek('prev')}
-                    className="p-2 text-gray-400 hover:text-gray-600"
+                    className="apple-button p-3 text-white hover:text-gray-200"
                   >
                     ←
                   </button>
                   <button
                     onClick={() => navigateWeek('next')}
-                    className="p-2 text-gray-400 hover:text-gray-600"
+                    className="apple-button p-3 text-white hover:text-gray-200"
                   >
                     →
                   </button>
                   <button
                     onClick={generateAIMealPlan}
                     disabled={generatingPlan}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:bg-blue-300"
+                    className="apple-button px-4 py-2 text-white apple-caption font-medium"
+                    style={{ background: generatingPlan ? 'rgba(0, 122, 255, 0.5)' : 'var(--apple-blue)' }}
                   >
                     {generatingPlan ? (
                       <>
@@ -579,7 +585,7 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                       </>
                     ) : (
                       <>
-                        <SparklesIcon className="h-4 w-4 inline mr-2" />
+                        <SparklesIcon className="h-4 w-4 inline mr-2 sf-icon" />
                         Generate AI Plan
                       </>
                     )}
@@ -589,18 +595,18 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
 
               {/* Meal Plan Grid */}
               {currentWeekPlan ? (
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="grid grid-cols-7 border-b border-gray-200">
+                <div className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
+                  <div className="grid grid-cols-7 border-b border-gray-200/50" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day} className="px-4 py-3 text-sm font-medium text-gray-900 bg-gray-50 text-center border-r border-gray-200 last:border-r-0">
+                      <div key={day} className="px-4 py-3 apple-caption font-medium text-gray-800 text-center border-r border-gray-200/50 last:border-r-0">
                         {day}
                       </div>
                     ))}
                   </div>
-                  <div className="grid grid-cols-7">
+                  <div className="grid grid-cols-7" style={{ background: 'white' }}>
                     {currentWeekPlan.dailyPlans.map((day, index) => (
-                      <div key={day.date} className="p-4 border-r border-gray-200 last:border-r-0 min-h-[200px]">
-                        <div className="text-sm font-medium text-gray-900 mb-3">
+                      <div key={day.date} className="p-4 border-r border-gray-200/30 last:border-r-0 min-h-[200px]">
+                        <div className="apple-caption font-medium text-gray-800 mb-3">
                           {new Date(day.date).getDate()}
                         </div>
                         <div className="space-y-2">
@@ -612,16 +618,20 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                                 mealName: getMealName(meal.mealType, index),
                                 date: day.date
                               })}
-                              className="p-2 bg-blue-50 rounded text-xs hover:bg-blue-100 cursor-pointer transition-colors"
+                              className="apple-card p-3 cursor-pointer apple-transition hover:transform hover:scale-[1.02]"
+                              style={{ 
+                                background: 'rgba(0, 122, 255, 0.08)',
+                                border: '1px solid rgba(0, 122, 255, 0.15)'
+                              }}
                             >
-                              <div className="font-medium text-gray-900 mb-1 capitalize">
+                              <div className="apple-caption font-medium text-gray-800 mb-1 capitalize">
                                 {meal.mealType}
                               </div>
-                              <div className="text-gray-600 text-xs">
+                              <div className="text-gray-600 apple-caption">
                                 {getMealName(meal.mealType, index)}
                               </div>
                               {meal.notes && (
-                                <div className="text-blue-600 text-xs mt-1">
+                                <div className="apple-caption mt-1" style={{ color: 'var(--apple-blue)' }}>
                                   {meal.notes}
                                 </div>
                               )}
@@ -634,16 +644,17 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <CalendarIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg mb-4">No meal plan for this week</p>
+                  <CalendarIcon className="h-16 w-16 text-gray-400/40 mx-auto mb-4 sf-icon" />
+                  <p className="apple-body text-gray-700 text-lg mb-4">No meal plan for this week</p>
                   {familyMembers.length === 0 ? (
                     <div className="space-y-4">
-                      <p className="text-gray-400 text-sm">Add family members first</p>
+                      <p className="apple-caption text-gray-600">Add family members first</p>
                       <button
                         onClick={() => setActiveTab('preferences')}
-                        className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                        className="apple-button px-4 py-2 text-white apple-caption font-medium"
+                        style={{ background: 'var(--apple-green)' }}
                       >
-                        <UserGroupIcon className="h-4 w-4 inline mr-2" />
+                        <UserGroupIcon className="h-4 w-4 inline mr-2 sf-icon" />
                         Add Family Members
                       </button>
                     </div>
@@ -651,7 +662,8 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                     <button
                       onClick={generateAIMealPlan}
                       disabled={generatingPlan}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-md text-lg font-medium hover:bg-blue-700 disabled:bg-blue-300"
+                      className="apple-button px-6 py-3 text-white apple-subtitle font-medium"
+                      style={{ background: generatingPlan ? 'rgba(0, 122, 255, 0.5)' : 'var(--apple-blue)' }}
                     >
                       {generatingPlan ? (
                         <>
@@ -660,7 +672,7 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                         </>
                       ) : (
                         <>
-                          <SparklesIcon className="h-5 w-5 inline mr-2" />
+                          <SparklesIcon className="h-5 w-5 inline mr-2 sf-icon" />
                           Generate AI Meal Plan
                         </>
                       )}
@@ -672,17 +684,17 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
               {/* Summary Stats */}
               {currentWeekPlan && (
                 <div className="grid grid-cols-3 gap-6">
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <span className="text-sm font-medium text-green-900">Estimated Cost</span>
-                    <p className="text-2xl font-bold text-green-900 mt-1">${currentWeekPlan.estimatedCost}</p>
+                  <div className="apple-card p-4" style={{ background: 'rgba(52, 199, 89, 0.1)', border: '1px solid rgba(52, 199, 89, 0.2)' }}>
+                    <span className="apple-caption font-medium" style={{ color: 'var(--apple-green)' }}>Estimated Cost</span>
+                    <p className="apple-title text-2xl mt-1" style={{ color: 'var(--apple-green)' }}>${currentWeekPlan.estimatedCost}</p>
                   </div>
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <span className="text-sm font-medium text-blue-900">Family Members</span>
-                    <p className="text-2xl font-bold text-blue-900 mt-1">{familyMembers.length}</p>
+                  <div className="apple-card p-4" style={{ background: 'rgba(0, 122, 255, 0.1)', border: '1px solid rgba(0, 122, 255, 0.2)' }}>
+                    <span className="apple-caption font-medium" style={{ color: 'var(--apple-blue)' }}>Family Members</span>
+                    <p className="apple-title text-2xl mt-1" style={{ color: 'var(--apple-blue)' }}>{familyMembers.length}</p>
                   </div>
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <span className="text-sm font-medium text-purple-900">Meals Planned</span>
-                    <p className="text-2xl font-bold text-purple-900 mt-1">
+                  <div className="apple-card p-4" style={{ background: 'rgba(175, 82, 222, 0.1)', border: '1px solid rgba(175, 82, 222, 0.2)' }}>
+                    <span className="apple-caption font-medium" style={{ color: 'var(--apple-purple)' }}>Meals Planned</span>
+                    <p className="apple-title text-2xl mt-1" style={{ color: 'var(--apple-purple)' }}>
                       {currentWeekPlan.dailyPlans.reduce((total, day) => total + day.meals.length, 0)}
                     </p>
                   </div>
@@ -862,20 +874,21 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
       {/* Detailed Meal View Modal */}
       {selectedMeal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setSelectedMeal(null)}></div>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedMeal(null)}></div>
           
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl h-[90vh] flex flex-col">
+          <div className="relative apple-card w-full max-w-4xl h-[90vh] flex flex-col" style={{ background: '#f5f5f7' }}>
             {(() => {
               const mealDetails = getMealDetails(selectedMeal.mealName, selectedMeal.meal.mealType);
               return (
                 <>
                   {/* Header */}
-                  <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+                  <div className="flex items-center justify-between p-6 border-b border-gray-200/50 flex-shrink-0" 
+                       style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
                     <div className="flex items-center">
-                      <CakeIcon className="h-6 w-6 text-orange-600 mr-2" />
+                      <CakeIcon className="h-6 w-6 mr-3 sf-icon" style={{ color: 'var(--apple-orange)' }} />
                       <div>
-                        <h2 className="text-xl font-bold text-gray-900">{mealDetails.name}</h2>
-                        <p className="text-sm text-gray-500">
+                        <h2 className="apple-title text-xl text-gray-800">{mealDetails.name}</h2>
+                        <p className="apple-caption text-gray-600">
                           {new Date(selectedMeal.date).toLocaleDateString('en-US', { 
                             weekday: 'long', 
                             month: 'long', 
@@ -884,57 +897,59 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                         </p>
                       </div>
                     </div>
-                    <button onClick={() => setSelectedMeal(null)} className="text-gray-400 hover:text-gray-600">
-                      <XMarkIcon className="w-6 h-6" />
+                    <button onClick={() => setSelectedMeal(null)} className="text-gray-600 hover:text-gray-800 apple-transition p-2 rounded-lg hover:bg-gray-100/50">
+                      <XMarkIcon className="w-6 h-6 sf-icon" />
                     </button>
                   </div>
 
                   {/* Scrollable Content */}
-                  <div className="flex-1 overflow-y-auto p-6">
+                  <div className="flex-1 overflow-y-auto p-6" style={{ background: 'white' }}>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                       {/* Left Column - Recipe Details */}
                       <div className="lg:col-span-2 space-y-6">
                         {/* Description & Quick Info */}
                         <div>
-                          <p className="text-gray-700 text-lg mb-4">{mealDetails.description}</p>
+                          <p className="apple-body text-gray-800 text-lg mb-4">{mealDetails.description}</p>
                           
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 apple-card" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
                             <div className="text-center">
-                              <ClockIcon className="h-5 w-5 text-gray-600 mx-auto mb-1" />
-                              <p className="text-sm font-medium text-gray-900">{mealDetails.prepTime} min</p>
-                              <p className="text-xs text-gray-500">Prep Time</p>
+                              <ClockIcon className="h-5 w-5 text-gray-600 mx-auto mb-1 sf-icon" />
+                              <p className="apple-caption font-medium text-gray-800">{mealDetails.prepTime} min</p>
+                              <p className="apple-caption text-gray-600">Prep Time</p>
                             </div>
                             <div className="text-center">
-                              <FireIcon className="h-5 w-5 text-gray-600 mx-auto mb-1" />
-                              <p className="text-sm font-medium text-gray-900">{mealDetails.cookTime} min</p>
-                              <p className="text-xs text-gray-500">Cook Time</p>
+                              <FireIcon className="h-5 w-5 text-gray-600 mx-auto mb-1 sf-icon" />
+                              <p className="apple-caption font-medium text-gray-800">{mealDetails.cookTime} min</p>
+                              <p className="apple-caption text-gray-600">Cook Time</p>
                             </div>
                             <div className="text-center">
-                              <UserGroupIcon className="h-5 w-5 text-gray-600 mx-auto mb-1" />
-                              <p className="text-sm font-medium text-gray-900">{mealDetails.servings}</p>
-                              <p className="text-xs text-gray-500">Servings</p>
+                              <UserGroupIcon className="h-5 w-5 text-gray-600 mx-auto mb-1 sf-icon" />
+                              <p className="apple-caption font-medium text-gray-800">{mealDetails.servings}</p>
+                              <p className="apple-caption text-gray-600">Servings</p>
                             </div>
                             <div className="text-center">
                               <span className={`inline-block w-5 h-5 rounded-full mx-auto mb-1 ${
                                 mealDetails.difficulty === 'easy' ? 'bg-green-500' :
                                 mealDetails.difficulty === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
                               }`}></span>
-                              <p className="text-sm font-medium text-gray-900 capitalize">{mealDetails.difficulty}</p>
-                              <p className="text-xs text-gray-500">Difficulty</p>
+                              <p className="apple-caption font-medium text-gray-800 capitalize">{mealDetails.difficulty}</p>
+                              <p className="apple-caption text-gray-600">Difficulty</p>
                             </div>
                           </div>
                         </div>
 
                         {/* Tags */}
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Tags</h3>
+                          <h3 className="apple-subtitle text-gray-800 mb-3">Tags</h3>
                           <div className="flex flex-wrap gap-2">
                             {mealDetails.tags.map(tag => (
-                              <span key={tag} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                              <span key={tag} className="px-3 py-1 rounded-full apple-caption" 
+                                    style={{ background: 'rgba(0, 122, 255, 0.1)', color: 'var(--apple-blue)' }}>
                                 {tag}
                               </span>
                             ))}
-                            <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+                            <span className="px-3 py-1 rounded-full apple-caption"
+                                  style={{ background: 'rgba(175, 82, 222, 0.1)', color: 'var(--apple-purple)' }}>
                               {mealDetails.cuisine}
                             </span>
                           </div>
@@ -942,12 +957,12 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
 
                         {/* Ingredients */}
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Ingredients</h3>
+                          <h3 className="apple-subtitle text-gray-800 mb-3">Ingredients</h3>
                           <div className="space-y-2">
                             {mealDetails.ingredients.map((ingredient, index) => (
-                              <div key={index} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded">
-                                <span className="text-gray-900">{ingredient.name}</span>
-                                <span className="text-gray-600 text-sm">
+                              <div key={index} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-xl apple-transition">
+                                <span className="apple-body text-gray-800">{ingredient.name}</span>
+                                <span className="apple-caption text-gray-600">
                                   {ingredient.amount} {ingredient.unit}
                                 </span>
                               </div>
@@ -957,14 +972,15 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
 
                         {/* Instructions */}
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Instructions</h3>
+                          <h3 className="apple-subtitle text-gray-800 mb-3">Instructions</h3>
                           <div className="space-y-3">
                             {mealDetails.instructions.map((step, index) => (
                               <div key={index} className="flex">
-                                <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-bold mr-3">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center apple-caption font-bold mr-3"
+                                     style={{ background: 'rgba(0, 122, 255, 0.1)', color: 'var(--apple-blue)' }}>
                                   {index + 1}
                                 </div>
-                                <p className="text-gray-700 pt-1">{step}</p>
+                                <p className="apple-body text-gray-800 pt-1">{step}</p>
                               </div>
                             ))}
                           </div>
@@ -972,23 +988,24 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
 
                         {/* Nutrition */}
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Nutrition (per serving)</h3>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-green-50 rounded-lg">
+                          <h3 className="apple-subtitle text-gray-800 mb-3">Nutrition (per serving)</h3>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 apple-card" 
+                               style={{ background: 'rgba(52, 199, 89, 0.1)', border: '1px solid rgba(52, 199, 89, 0.2)' }}>
                             <div className="text-center">
-                              <p className="text-lg font-bold text-green-900">{mealDetails.nutrition.calories}</p>
-                              <p className="text-xs text-green-700">Calories</p>
+                              <p className="apple-subtitle font-bold" style={{ color: 'var(--apple-green)' }}>{mealDetails.nutrition.calories}</p>
+                              <p className="apple-caption" style={{ color: 'var(--apple-green)' }}>Calories</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-lg font-bold text-green-900">{mealDetails.nutrition.protein}g</p>
-                              <p className="text-xs text-green-700">Protein</p>
+                              <p className="apple-subtitle font-bold" style={{ color: 'var(--apple-green)' }}>{mealDetails.nutrition.protein}g</p>
+                              <p className="apple-caption" style={{ color: 'var(--apple-green)' }}>Protein</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-lg font-bold text-green-900">{mealDetails.nutrition.carbs}g</p>
-                              <p className="text-xs text-green-700">Carbs</p>
+                              <p className="apple-subtitle font-bold" style={{ color: 'var(--apple-green)' }}>{mealDetails.nutrition.carbs}g</p>
+                              <p className="apple-caption" style={{ color: 'var(--apple-green)' }}>Carbs</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-lg font-bold text-green-900">{mealDetails.nutrition.fat}g</p>
-                              <p className="text-xs text-green-700">Fat</p>
+                              <p className="apple-subtitle font-bold" style={{ color: 'var(--apple-green)' }}>{mealDetails.nutrition.fat}g</p>
+                              <p className="apple-caption" style={{ color: 'var(--apple-green)' }}>Fat</p>
                             </div>
                           </div>
                         </div>
@@ -997,16 +1014,16 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                       {/* Right Column - Family Reactions & History */}
                       <div className="space-y-6">
                         {/* Quick Stats */}
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Recipe Stats</h3>
+                        <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+                          <h3 className="apple-subtitle text-gray-800 mb-3">Recipe Stats</h3>
                           <div className="space-y-2">
                             <div className="flex justify-between">
-                              <span className="text-gray-600">Times Cooked:</span>
-                              <span className="font-medium text-gray-900">{mealDetails.timesCooked}</span>
+                              <span className="apple-caption text-gray-600">Times Cooked:</span>
+                              <span className="apple-caption font-medium text-gray-800">{mealDetails.timesCooked}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-600">Last Made:</span>
-                              <span className="font-medium text-gray-900">
+                              <span className="apple-caption text-gray-600">Last Made:</span>
+                              <span className="apple-caption font-medium text-gray-800">
                                 {mealDetails.lastMade.toLocaleDateString()}
                               </span>
                             </div>
@@ -1015,15 +1032,15 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
 
                         {/* Family Reactions */}
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Family Reactions</h3>
+                          <h3 className="apple-subtitle text-gray-800 mb-3">Family Reactions</h3>
                           <div className="space-y-3">
                             {mealDetails.familyReactions.map((reaction) => (
-                              <div key={reaction.memberId} className="p-3 bg-white border border-gray-200 rounded-lg">
+                              <div key={reaction.memberId} className="apple-card p-3" style={{ background: 'rgba(255, 255, 255, 0.8)' }}>
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="font-medium text-gray-900">{reaction.memberName}</span>
+                                  <span className="apple-caption font-medium text-gray-800">{reaction.memberName}</span>
                                   <div className="flex items-center space-x-1">
                                     {reaction.loved && (
-                                      <HeartSolid className="h-4 w-4 text-red-500" />
+                                      <HeartSolid className="h-4 w-4" style={{ color: 'var(--apple-red)' }} />
                                     )}
                                     <div className="flex">
                                       {[1, 2, 3, 4, 5].map((star) => (
@@ -1037,7 +1054,7 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                                     </div>
                                   </div>
                                 </div>
-                                <p className="text-sm text-gray-600 italic">"{reaction.comment}"</p>
+                                <p className="apple-caption text-gray-600 italic">"{reaction.comment}"</p>
                               </div>
                             ))}
                           </div>
@@ -1045,16 +1062,39 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
 
                         {/* Action Buttons */}
                         <div className="space-y-3">
-                          <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700">
+                          <button 
+                            onClick={() => {
+                              setCookingMode({
+                                isActive: true,
+                                currentStep: 0,
+                                meal: mealDetails
+                              });
+                            }}
+                            className="apple-button w-full px-4 py-2 text-white apple-caption font-medium"
+                            style={{ background: 'var(--apple-blue)' }}>
                             Start Cooking Mode
                           </button>
-                          <button className="w-full px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700">
+                          <button 
+                            onClick={() => {
+                              const ingredients = mealDetails.ingredients.map(ing => `${ing.amount} ${ing.unit} ${ing.name}`).join('\n');
+                              alert(`🛒 Added to shopping list:\n\n${ingredients}`);
+                            }}
+                            className="apple-button w-full px-4 py-2 text-white apple-caption font-medium"
+                            style={{ background: 'var(--apple-green)' }}>
                             Add to Shopping List
                           </button>
-                          <button className="w-full px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-medium hover:bg-orange-700">
+                          <button 
+                            onClick={() => {
+                              const rating = prompt('⭐ Rate this meal (1-5 stars):');
+                              if (rating && parseInt(rating) >= 1 && parseInt(rating) <= 5) {
+                                alert(`Thanks for rating ${mealDetails.name} ${rating} stars!`);
+                              }
+                            }}
+                            className="apple-button w-full px-4 py-2 text-white apple-caption font-medium"
+                            style={{ background: 'var(--apple-orange)' }}>
                             Rate This Meal
                           </button>
-                          <button className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-50">
+                          <button className="apple-button w-full px-4 py-2 text-gray-500 apple-caption font-medium hover:text-gray-700 apple-transition">
                             Edit Recipe
                           </button>
                         </div>
@@ -1064,6 +1104,133 @@ export default function MealPlanningModal({ isOpen, onClose, familyId }: MealPla
                 </>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Cooking Mode Modal */}
+      {cookingMode?.isActive && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setCookingMode(null)}></div>
+          
+          <div className="relative apple-card w-full max-w-2xl h-[85vh] flex flex-col" style={{ background: '#f5f5f7' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200/50 flex-shrink-0" 
+                 style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+              <div className="flex items-center">
+                <FireIcon className="h-6 w-6 mr-3 sf-icon" style={{ color: 'var(--apple-orange)' }} />
+                <div>
+                  <h2 className="apple-title text-xl text-gray-800">Cooking Mode</h2>
+                  <p className="apple-caption text-gray-600">{cookingMode.meal.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setCookingMode(null)} className="text-gray-600 hover:text-gray-800 apple-transition p-2 rounded-lg hover:bg-gray-100/50">
+                <XMarkIcon className="w-6 h-6 sf-icon" />
+              </button>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="p-4 border-b border-gray-200/50" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="apple-caption text-gray-600">Step {cookingMode.currentStep + 1} of {cookingMode.meal.instructions.length}</span>
+                <span className="apple-caption text-gray-600">
+                  {Math.round(((cookingMode.currentStep + 1) / cookingMode.meal.instructions.length) * 100)}% Complete
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="h-2 rounded-full apple-transition"
+                  style={{ 
+                    background: 'var(--apple-blue)',
+                    width: `${((cookingMode.currentStep + 1) / cookingMode.meal.instructions.length) * 100}%`
+                  }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Current Step Content */}
+            <div className="flex-1 overflow-y-auto p-6" style={{ background: 'white' }}>
+              <div className="space-y-6">
+                {/* Current Step */}
+                <div className="text-center">
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                       style={{ background: 'rgba(0, 122, 255, 0.1)' }}>
+                    <span className="apple-title font-bold" style={{ color: 'var(--apple-blue)' }}>
+                      {cookingMode.currentStep + 1}
+                    </span>
+                  </div>
+                  <p className="apple-body text-gray-800 text-lg leading-relaxed">
+                    {cookingMode.meal.instructions[cookingMode.currentStep]}
+                  </p>
+                </div>
+
+                {/* Timer Section (if first step) */}
+                {cookingMode.currentStep === 0 && (
+                  <div className="apple-card p-4 text-center" style={{ background: 'rgba(255, 149, 0, 0.1)' }}>
+                    <ClockIcon className="h-6 w-6 mx-auto mb-2 sf-icon" style={{ color: 'var(--apple-orange)' }} />
+                    <p className="apple-subtitle" style={{ color: 'var(--apple-orange)' }}>
+                      Prep Time: {cookingMode.meal.prepTime} minutes
+                    </p>
+                    <p className="apple-caption text-gray-600">
+                      Make sure you have all ingredients ready!
+                    </p>
+                  </div>
+                )}
+
+                {/* Ingredients Quick Reference */}
+                <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+                  <h4 className="apple-subtitle text-gray-800 mb-3">Ingredients Quick Reference</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {cookingMode.meal.ingredients.slice(0, 6).map((ingredient: any, index: number) => (
+                      <div key={index} className="flex justify-between items-center">
+                        <span className="apple-caption text-gray-800">{ingredient.name}</span>
+                        <span className="apple-caption text-gray-600">
+                          {ingredient.amount} {ingredient.unit}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Controls */}
+            <div className="p-6 border-t border-gray-200/50 flex-shrink-0" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setCookingMode(prev => prev ? {...prev, currentStep: Math.max(0, prev.currentStep - 1)} : null)}
+                  disabled={cookingMode.currentStep === 0}
+                  className={`flex-1 px-4 py-3 rounded-xl apple-caption font-medium apple-transition ${
+                    cookingMode.currentStep === 0 
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Previous Step
+                </button>
+                
+                {cookingMode.currentStep < cookingMode.meal.instructions.length - 1 ? (
+                  <button
+                    onClick={() => setCookingMode(prev => prev ? {...prev, currentStep: prev.currentStep + 1} : null)}
+                    className="flex-1 px-4 py-3 text-white apple-caption font-medium rounded-xl apple-transition"
+                    style={{ background: 'var(--apple-blue)' }}
+                  >
+                    Next Step
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setCookingMode(null);
+                      alert('🎉 Cooking complete! Enjoy your meal!');
+                    }}
+                    className="flex-1 px-4 py-3 text-white apple-caption font-medium rounded-xl apple-transition"
+                    style={{ background: 'var(--apple-green)' }}
+                  >
+                    Finish Cooking
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

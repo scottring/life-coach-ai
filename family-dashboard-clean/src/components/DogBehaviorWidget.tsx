@@ -1,10 +1,11 @@
 // src/components/DogBehaviorWidget.tsx
 import React, { useState, useEffect } from 'react';
-import { DogSOP, SOPLogEntry } from '../types/dogBehavior';
+import { DogSOP, SOPLogEntry, LeaveSessionLog } from '../types/dogBehavior';
 import { DogBehaviorService } from '../services/dogBehaviorService';
-import { ClipboardDocumentListIcon, PlusIcon, PencilSquareIcon } from '@heroicons/react/24/outline'; // Added PencilSquareIcon
+import { ClipboardDocumentListIcon, PlusIcon, PencilSquareIcon, HomeIcon } from '@heroicons/react/24/outline'; // Added PencilSquareIcon
 import LogSOPModal from './LogSOPModal';
 import EditSOPModal from './EditSOPModal';
+import ReturnHomeModal from './ReturnHomeModal';
 
 interface DogBehaviorWidgetProps {
   familyId: string;
@@ -20,17 +21,23 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
   const [isEditSOPModalOpen, setIsEditSOPModalOpen] = useState(false);
   // We'll use sopToEdit for editing later. For now, null means 'new SOP'.
   const [sopToEdit, setSopToEdit] = useState<DogSOP | null>(null);
+  const [activeSession, setActiveSession] = useState<LeaveSessionLog | null>(null);
+  const [isReturnHomeModalOpen, setIsReturnHomeModalOpen] = useState(false);
 
   const fetchSOPs = async () => {
     try {
       setLoading(true);
-      const fetchedSops = await DogBehaviorService.getSOPs(familyId);
+      const [fetchedSops, activeSessionData] = await Promise.all([
+        DogBehaviorService.getSOPs(familyId),
+        DogBehaviorService.getActiveSession(familyId)
+      ]);
       setSops(fetchedSops);
+      setActiveSession(activeSessionData);
       setError(null);
     } catch (err) {
-      console.error('Error fetching SOPs:', err);
-      setError('Failed to load dog behavior protocols.');
-      setSops([]); // Clear SOPs on error
+      console.error('Error fetching data:', err);
+      setError('Failed to load dog behavior data.');
+      setSops([]);
     } finally {
       setLoading(false);
     }
@@ -59,13 +66,29 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
     };
 
     try {
-      await DogBehaviorService.logSOP(familyId, newLog);
-      // Optionally, you could refresh logs here or show a success message
+      const logId = await DogBehaviorService.logSOP(familyId, newLog);
+      
+      // If this is a "leaving" SOP, start a new session
+      if (selectedSop.name.toLowerCase().includes('leaving') || selectedSop.name.toLowerCase().includes('departure')) {
+        await DogBehaviorService.startLeaveSession(familyId, userId, 'Demo User', logId);
+        // Refresh data to show the new active session
+        fetchSOPs();
+      }
+      
       console.log('SOP Logged successfully!');
     } catch (err) {
       console.error('Failed to save log:', err);
       // Handle error display to user
     }
+  };
+
+  const handleReturnHomeClick = () => {
+    setIsReturnHomeModalOpen(true);
+  };
+
+  const handleSessionCompleted = () => {
+    setActiveSession(null);
+    fetchSOPs(); // Refresh data
   };
 
   const handleAddNewSOP = () => {
@@ -101,7 +124,24 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between items-center mb-4">
+        {/* Active Session Status */}
+        {activeSession && (
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center px-3 py-2 bg-orange-100 text-orange-800 rounded-lg">
+              <div className="w-2 h-2 bg-orange-500 rounded-full mr-2 animate-pulse"></div>
+              <span className="text-sm font-medium">Away from home</span>
+            </div>
+            <button
+              onClick={handleReturnHomeClick}
+              className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition"
+            >
+              <HomeIcon className="h-4 w-4 mr-2" />
+              I'm Back!
+            </button>
+          </div>
+        )}
+        
         <button onClick={handleAddNewSOP} className="p-2 rounded-full hover:bg-gray-100" title="Add new SOP">
           <PlusIcon className="h-6 w-6 text-gray-500" />
         </button>
@@ -162,6 +202,14 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
         sopToEdit={sopToEdit}
         onSave={handleSaveSOP}
       />
+      {activeSession && (
+        <ReturnHomeModal
+          isOpen={isReturnHomeModalOpen}
+          onClose={() => setIsReturnHomeModalOpen(false)}
+          session={activeSession}
+          onSessionCompleted={handleSessionCompleted}
+        />
+      )}
     </div>
   );
 };

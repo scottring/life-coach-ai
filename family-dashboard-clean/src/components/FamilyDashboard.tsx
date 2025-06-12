@@ -41,7 +41,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
   };
 
   return (
-    <div className="p-4 lg:p-6 bg-gray-100 min-h-screen">
+    <div className="p-4 lg:p-6 min-h-screen">
       <ResponsiveGridLayout
         className="layout"
         layouts={layouts}
@@ -50,16 +50,17 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
         rowHeight={200}
         draggableHandle=".drag-handle"
       >
-        <div key="mealPlanner" className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-b">
-            <h3 className="font-medium text-gray-700">Meal Planner</h3>
-            <div className="drag-handle cursor-move p-1 hover:bg-gray-200 rounded">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div key="mealPlanner" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
+               style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+            <h3 className="apple-subtitle text-gray-800">Meal Planner</h3>
+            <div className="drag-handle cursor-move p-2 hover:bg-gray-100/50 rounded-lg apple-transition">
+              <svg className="w-4 h-4 text-gray-600 sf-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
               </svg>
             </div>
           </div>
-          <div className="p-4">
+          <div className="p-4" style={{ background: 'white' }}>
             <MealPlannerWidget 
               familyId={familyId} 
               userId={userId} 
@@ -67,42 +68,45 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
             />
           </div>
         </div>
-        <div key="dogBehavior" className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-b">
-            <h3 className="font-medium text-gray-700">Dog Behavior</h3>
-            <div className="drag-handle cursor-move p-1 hover:bg-gray-200 rounded">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div key="dogBehavior" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
+               style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+            <h3 className="apple-subtitle text-gray-800">Dog Behavior</h3>
+            <div className="drag-handle cursor-move p-2 hover:bg-gray-100/50 rounded-lg apple-transition">
+              <svg className="w-4 h-4 text-gray-600 sf-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
               </svg>
             </div>
           </div>
-          <div className="p-4">
+          <div className="p-4" style={{ background: 'white' }}>
             <DogBehaviorWidget familyId={familyId} userId={userId} />
           </div>
         </div>
-        <div key="events" className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-b">
-            <h3 className="font-medium text-gray-700">Upcoming Events</h3>
-            <div className="drag-handle cursor-move p-1 hover:bg-gray-200 rounded">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div key="events" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
+               style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+            <h3 className="apple-subtitle text-gray-800">Upcoming Events</h3>
+            <div className="drag-handle cursor-move p-2 hover:bg-gray-100/50 rounded-lg apple-transition">
+              <svg className="w-4 h-4 text-gray-600 sf-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
               </svg>
             </div>
           </div>
-          <div className="p-6">
-            <p className="text-gray-600">No events scheduled.</p>
+          <div className="p-6" style={{ background: 'white' }}>
+            <p className="apple-body text-gray-800">No events scheduled.</p>
           </div>
         </div>
-        <div key="todos" className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="flex items-center justify-between bg-gray-50 px-4 py-2 border-b">
-            <h3 className="font-medium text-gray-700">To-Do List</h3>
-            <div className="drag-handle cursor-move p-1 hover:bg-gray-200 rounded">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div key="todos" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
+               style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+            <h3 className="apple-subtitle text-gray-800">To-Do List</h3>
+            <div className="drag-handle cursor-move p-2 hover:bg-gray-100/50 rounded-lg apple-transition">
+              <svg className="w-4 h-4 text-gray-600 sf-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
               </svg>
             </div>
           </div>
-          <div className="p-4">
+          <div className="p-4" style={{ background: 'white' }}>
             <TodoWidget familyId={familyId} userId={userId} />
           </div>
         </div>

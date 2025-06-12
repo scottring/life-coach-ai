@@ -1,0 +1,164 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "family dashboard",
+      "intents": [
+        {
+          "name": "StartMonitoringIntent",
+          "slots": [],
+          "samples": [
+            "start monitoring",
+            "start dog monitoring",
+            "begin monitoring session",
+            "I'm leaving",
+            "start watching the dog",
+            "monitor my dog"
+          ]
+        },
+        {
+          "name": "StopMonitoringIntent",
+          "slots": [],
+          "samples": [
+            "stop monitoring",
+            "end monitoring",
+            "I'm back",
+            "I'm home",
+            "stop watching the dog",
+            "end session"
+          ]
+        },
+        {
+          "name": "BarkDetectedIntent",
+          "slots": [
+            {
+              "name": "intensity",
+              "type": "INTENSITY_TYPE"
+            }
+          ],
+          "samples": [
+            "the dog is barking",
+            "I hear barking",
+            "dog barked",
+            "the dog is barking {intensity}",
+            "bark detected",
+            "loud barking"
+          ]
+        },
+        {
+          "name": "MotionDetectedIntent",
+          "slots": [
+            {
+              "name": "activity",
+              "type": "ACTIVITY_TYPE"
+            }
+          ],
+          "samples": [
+            "the dog is moving around",
+            "I see movement",
+            "the dog is {activity}",
+            "motion detected",
+            "the dog is restless"
+          ]
+        },
+        {
+          "name": "ReportStatusIntent",
+          "slots": [],
+          "samples": [
+            "how is my dog",
+            "dog status",
+            "monitoring report",
+            "what's the dog doing",
+            "give me an update"
+          ]
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.YesIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NoIntent",
+          "samples": []
+        }
+      ],
+      "types": [
+        {
+          "name": "INTENSITY_TYPE",
+          "values": [
+            {
+              "name": {
+                "value": "light"
+              }
+            },
+            {
+              "name": {
+                "value": "moderate"
+              }
+            },
+            {
+              "name": {
+                "value": "heavy"
+              }
+            },
+            {
+              "name": {
+                "value": "loud"
+              }
+            },
+            {
+              "name": {
+                "value": "quiet"
+              }
+            }
+          ]
+        },
+        {
+          "name": "ACTIVITY_TYPE",
+          "values": [
+            {
+              "name": {
+                "value": "pacing"
+              }
+            },
+            {
+              "name": {
+                "value": "running"
+              }
+            },
+            {
+              "name": {
+                "value": "jumping"
+              }
+            },
+            {
+              "name": {
+                "value": "restless"
+              }
+            },
+            {
+              "name": {
+                "value": "calm"
+              }
+            },
+            {
+              "name": {
+                "value": "sleeping"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

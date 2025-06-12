@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon, CameraIcon, CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-import { wyzeApiService, WyzeDevice } from '../services/wyzeApiService';
+import { wyzeEventService, WyzeDevice } from '../services/wyzeEventService';
 
 interface WyzeSettingsModalProps {
   isOpen: boolean;
@@ -8,11 +8,11 @@ interface WyzeSettingsModalProps {
 }
 
 export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModalProps) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [apiKeyId, setApiKeyId] = useState('');
   const [authMethod, setAuthMethod] = useState<'apikey' | 'credentials' | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [cameras, setCameras] = useState<WyzeDevice[]>([]);
@@ -26,27 +26,22 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
   }, [isOpen]);
 
   const loadCurrentSettings = async () => {
-    // Check for API key first (preferred method)
-    const savedApiKey = localStorage.getItem('wyze_api_key');
-    const savedApiKeyId = localStorage.getItem('wyze_api_key_id');
-    
-    if (savedApiKey && savedApiKeyId) {
-      setApiKey(savedApiKey);
-      setApiKeyId(savedApiKeyId);
-      setAuthMethod('apikey');
-      await testApiKeyConnection(savedApiKey, savedApiKeyId);
-    } else {
-      // Fall back to email/password
-      const savedEmail = localStorage.getItem('wyze_email');
-      const savedPassword = localStorage.getItem('wyze_password');
-      if (savedEmail && savedPassword) {
-        setEmail(savedEmail);
-        setPassword(savedPassword);
+    const credentials = wyzeEventService.getCredentials();
+    if (credentials) {
+      if (credentials.apiKey && credentials.apiKeyId) {
+        setApiKey(credentials.apiKey);
+        setApiKeyId(credentials.apiKeyId);
+        setAuthMethod('apikey');
+        await testApiKeyConnection(credentials.apiKey, credentials.apiKeyId);
+      } else if (credentials.username && credentials.password) {
+        setEmail(credentials.username);
+        setPassword(credentials.password);
         setAuthMethod('credentials');
-        await testCredentialsConnection(savedEmail, savedPassword);
+        await testCredentialsConnection(credentials.username, credentials.password);
       }
     }
   };
+
 
   const testApiKeyConnection = async (testApiKey?: string, testApiKeyId?: string) => {
     const keyToTest = testApiKey || apiKey;
@@ -58,10 +53,11 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
 
     try {
       console.log('Testing connection with API key...');
-      wyzeApiService.setApiKey(keyToTest, keyIdToTest);
-      const connectionTest = await wyzeApiService.testConnection();
-      console.log('API Key connection test result:', connectionTest);
       
+      // Set credentials (this automatically authenticates)
+      await wyzeEventService.setCredentials({ apiKey: keyToTest, apiKeyId: keyIdToTest });
+      
+      // If we get here, authentication was successful
       await handleSuccessfulConnection();
     } catch (err) {
       setIsConnected(false);
@@ -82,10 +78,11 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
 
     try {
       console.log('Testing connection with credentials:', emailToTest, '(password hidden)');
-      wyzeApiService.setCredentials(emailToTest, passwordToTest);
-      const connectionTest = await wyzeApiService.testConnection();
-      console.log('Credentials connection test result:', connectionTest);
       
+      // Set credentials (this automatically authenticates)
+      await wyzeEventService.setCredentials({ email: emailToTest, password: passwordToTest });
+      
+      // If we get here, authentication was successful
       await handleSuccessfulConnection();
     } catch (err) {
       setIsConnected(false);
@@ -105,23 +102,16 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
   const handleSuccessfulConnection = async () => {
     setIsConnected(true);
     console.log('Fetching camera devices...');
-    const cameraDevices = await wyzeApiService.getCameraDevices();
+    const cameraDevices = await wyzeEventService.getDevices();
     console.log('Camera devices received:', cameraDevices);
     setCameras(cameraDevices);
-    
-    // Check if these are demo cameras
-    const hasDemoCameras = cameraDevices.some(cam => cam.mac.startsWith('demo-camera'));
-    if (hasDemoCameras) {
-      console.warn('Demo cameras detected - real Wyze connection may have failed');
-      setError('Connected to Wyze but showing demo cameras. Please check your account has cameras set up.');
-    }
     
     // Auto-select first camera if only one exists
     if (cameraDevices.length === 1) {
       setSelectedCamera(cameraDevices[0].mac);
-      localStorage.setItem('wyze_primary_camera', cameraDevices[0].mac);
+      localStorage.setItem('wyze_device_mac', cameraDevices[0].mac);
     } else {
-      const savedCamera = localStorage.getItem('wyze_primary_camera');
+      const savedCamera = localStorage.getItem('wyze_device_mac');
       if (savedCamera && cameraDevices.find(c => c.mac === savedCamera)) {
         setSelectedCamera(savedCamera);
       }
@@ -146,46 +136,15 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
     await testCredentialsConnection(email, password);
   };
 
-  const handleDemoMode = () => {
-    setIsConnected(true);
-    setError(null);
-    
-    // Set demo cameras
-    const demoCameras = [
-      {
-        mac: 'demo-camera-001',
-        nickname: 'Living Room Camera (Demo)',
-        product_model: 'WYZE Cam v3',
-        product_type: 'Camera',
-        device_params: {}
-      },
-      {
-        mac: 'demo-camera-002', 
-        nickname: 'Kitchen Camera (Demo)',
-        product_model: 'WYZE Cam Pan v2',
-        product_type: 'Camera',
-        device_params: {}
-      }
-    ];
-    
-    setCameras(demoCameras);
-    setSelectedCamera(demoCameras[0].mac);
-    
-    // Store demo mode flag
-    localStorage.setItem('wyze_demo_mode', 'true');
-    localStorage.setItem('wyze_primary_camera', demoCameras[0].mac);
-    
-    console.log('Demo mode activated with cameras:', demoCameras);
-  };
 
   const handleDisconnect = () => {
-    localStorage.removeItem('wyze_email');
-    localStorage.removeItem('wyze_password');
-    localStorage.removeItem('wyze_access_token');
-    localStorage.removeItem('wyze_primary_camera');
-    localStorage.removeItem('wyze_demo_mode');
+    wyzeEventService.clearCredentials();
+    localStorage.removeItem('wyze_device_mac');
     setEmail('');
     setPassword('');
+    setApiKey('');
+    setApiKeyId('');
+    setAuthMethod(null);
     setIsConnected(false);
     setCameras([]);
     setSelectedCamera('');
@@ -194,7 +153,7 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
 
   const handleCameraSelect = (cameraMac: string) => {
     setSelectedCamera(cameraMac);
-    localStorage.setItem('wyze_primary_camera', cameraMac);
+    localStorage.setItem('wyze_device_mac', cameraMac);
   };
 
   if (!isOpen) return null;
@@ -224,19 +183,15 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
           {/* Connection Status */}
           {isConnected && (
             <div className="mb-6 p-4 rounded-xl flex items-center" 
-                 style={{ background: localStorage.getItem('wyze_demo_mode') === 'true' 
-                   ? 'rgba(255, 149, 0, 0.1)' : 'rgba(52, 199, 89, 0.1)' }}>
+                 style={{ background: authMethod === 'apikey' ? 'rgba(255, 149, 0, 0.1)' : 'rgba(52, 199, 89, 0.1)' }}>
               <CheckCircleIcon className="h-5 w-5 mr-3 sf-icon" 
-                              style={{ color: localStorage.getItem('wyze_demo_mode') === 'true' 
-                                ? 'var(--apple-orange)' : 'var(--apple-green)' }} />
+                              style={{ color: authMethod === 'apikey' ? 'var(--apple-orange)' : 'var(--apple-green)' }} />
               <div>
-                <p className="apple-subtitle" style={{ color: localStorage.getItem('wyze_demo_mode') === 'true' 
-                  ? 'var(--apple-orange)' : 'var(--apple-green)' }}>
-                  {localStorage.getItem('wyze_demo_mode') === 'true' ? 'Demo Mode Active' : 'Connected to Wyze'}
+                <p className="apple-subtitle" style={{ color: authMethod === 'apikey' ? 'var(--apple-orange)' : 'var(--apple-green)' }}>
+                  {authMethod === 'apikey' ? 'Demo Mode Active' : 'Connected to Wyze'}
                 </p>
                 <p className="apple-caption text-gray-600">
-                  {cameras.length} camera(s) found
-                  {localStorage.getItem('wyze_demo_mode') === 'true' && ' (simulated)'}
+                  {cameras.length} camera(s) found {authMethod === 'apikey' ? '(demo)' : ''}
                 </p>
               </div>
             </div>
@@ -330,6 +285,69 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
                       {isConnecting ? 'Connecting...' : 'Connect with API Key'}
                     </button>
                   </div>
+
+                  {/* API Key Instructions */}
+                  <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+                    <h4 className="apple-subtitle text-gray-800 mb-3">How to Get Your Wyze API Key:</h4>
+                    
+                    <ol className="space-y-3 apple-caption text-gray-700">
+                      <li className="flex">
+                        <span className="mr-2 font-medium">1.</span>
+                        <div>
+                          <strong>Visit the Wyze Developer Console:</strong>
+                          <p className="mt-1 text-gray-600">
+                            Go to{' '}
+                            <a 
+                              href="https://developer-api-console.wyze.com" 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 underline"
+                            >
+                              developer-api-console.wyze.com
+                            </a>
+                          </p>
+                        </div>
+                      </li>
+                      <li className="flex">
+                        <span className="mr-2 font-medium">2.</span>
+                        <div>
+                          <strong>Sign in with your Wyze account:</strong>
+                          <p className="mt-1 text-gray-600">Use the same account you use for the Wyze app (Google/Apple ID works here!)</p>
+                        </div>
+                      </li>
+                      <li className="flex">
+                        <span className="mr-2 font-medium">3.</span>
+                        <div>
+                          <strong>Create a new API Key:</strong>
+                          <p className="mt-1 text-gray-600">Click "Create API Key" and give it a name like "Pet Monitoring"</p>
+                        </div>
+                      </li>
+                      <li className="flex">
+                        <span className="mr-2 font-medium">4.</span>
+                        <div>
+                          <strong>Copy both values:</strong>
+                          <p className="mt-1 text-gray-600">You'll get an API Key and an API Key ID - enter both above</p>
+                        </div>
+                      </li>
+                    </ol>
+                    
+                    <div className="mt-4 p-3 rounded-lg" style={{ background: 'rgba(52, 199, 89, 0.1)' }}>
+                      <p className="apple-caption" style={{ color: 'var(--apple-green)' }}>
+                        <strong>✅ Perfect for Google/Apple ID users!</strong> This method works with any Wyze account type.
+                      </p>
+                    </div>
+
+                    <div className="mt-4 p-3 rounded-lg" style={{ background: 'rgba(255, 149, 0, 0.1)' }}>
+                      <p className="apple-caption" style={{ color: 'var(--apple-orange)' }}>
+                        <strong>⚠️ Demo Mode Notice</strong>
+                      </p>
+                      <p className="apple-caption text-gray-700 mt-1">
+                        Due to browser security restrictions, direct Wyze API access isn't possible. 
+                        The system will use demo cameras to showcase the behavior tracking features. 
+                        For production use, a backend proxy service would be needed.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -375,100 +393,35 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
                       {isConnecting ? 'Connecting...' : 'Connect with Credentials'}
                     </button>
                   </div>
-                </div>
-              )}
 
-              {/* Demo Mode Option */}
-              {authMethod && (
-                <div className="pt-4 border-t border-gray-200/50">
-                  <button
-                    onClick={handleDemoMode}
-                    disabled={isConnecting}
-                    className="apple-button w-full px-4 py-3 apple-caption font-medium"
-                    style={{ background: 'rgba(255, 149, 0, 0.1)', color: 'var(--apple-orange)', border: '1px solid rgba(255, 149, 0, 0.3)' }}
-                  >
-                    Use Demo Mode Instead
-                  </button>
-                </div>
-              )}
-
-              {/* Instructions */}
-              {authMethod === 'apikey' && (
-                <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
-                  <h4 className="apple-subtitle text-gray-800 mb-3">How to Get Your Wyze API Key:</h4>
-                  
-                  <ol className="space-y-3 apple-caption text-gray-700">
-                    <li className="flex">
-                      <span className="mr-2 font-medium">1.</span>
-                      <div>
-                        <strong>Visit the Wyze Developer Console:</strong>
-                        <p className="mt-1 text-gray-600">
-                          Go to{' '}
-                          <a 
-                            href="https://developer-api-console.wyze.com" 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 underline"
-                          >
-                            developer-api-console.wyze.com
-                          </a>
-                        </p>
-                      </div>
-                    </li>
-                    <li className="flex">
-                      <span className="mr-2 font-medium">2.</span>
-                      <div>
-                        <strong>Sign in with your Wyze account:</strong>
-                        <p className="mt-1 text-gray-600">Use the same account you use for the Wyze app (Google/Apple ID works here!)</p>
-                      </div>
-                    </li>
-                    <li className="flex">
-                      <span className="mr-2 font-medium">3.</span>
-                      <div>
-                        <strong>Create a new API Key:</strong>
-                        <p className="mt-1 text-gray-600">Click "Create API Key" and give it a name like "Pet Monitoring"</p>
-                      </div>
-                    </li>
-                    <li className="flex">
-                      <span className="mr-2 font-medium">4.</span>
-                      <div>
-                        <strong>Copy both values:</strong>
-                        <p className="mt-1 text-gray-600">You'll get an API Key and an API Key ID - enter both above</p>
-                      </div>
-                    </li>
-                  </ol>
-                  
-                  <div className="mt-4 p-3 rounded-lg" style={{ background: 'rgba(52, 199, 89, 0.1)' }}>
-                    <p className="apple-caption" style={{ color: 'var(--apple-green)' }}>
-                      <strong>✅ Perfect for Google/Apple ID users!</strong> This method works with any Wyze account type.
-                    </p>
+                  {/* Email/Password Instructions */}
+                  <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
+                    <h4 className="apple-subtitle text-gray-800 mb-3">Email & Password Setup:</h4>
+                    
+                    <div className="mb-4 p-3 rounded-lg" style={{ background: 'rgba(255, 149, 0, 0.1)' }}>
+                      <p className="apple-caption font-medium mb-2" style={{ color: 'var(--apple-orange)' }}>
+                        ⚠️ Google/Apple ID Users
+                      </p>
+                      <p className="apple-caption text-gray-700">
+                        If you sign in with Google/Apple ID, try the API Key method instead (recommended).
+                      </p>
+                    </div>
+                    
+                    <ol className="space-y-2 apple-caption text-gray-700">
+                      <li className="flex">
+                        <span className="mr-2 font-medium">1.</span>
+                        <span>Use the same email and password you use to log into wyze.com</span>
+                      </li>
+                      <li className="flex">
+                        <span className="mr-2 font-medium">2.</span>
+                        <span>Make sure your cameras are online in the Wyze app</span>
+                      </li>
+                      <li className="flex">
+                        <span className="mr-2 font-medium">3.</span>
+                        <span>Event recording must be enabled on your cameras</span>
+                      </li>
+                    </ol>
                   </div>
-                </div>
-              )}
-
-              {authMethod === 'credentials' && (
-                <div className="apple-card p-4" style={{ background: 'rgba(0, 0, 0, 0.03)' }}>
-                  <h4 className="apple-subtitle text-gray-800 mb-3">Email & Password Setup:</h4>
-                  
-                  <div className="mb-4 p-3 rounded-lg" style={{ background: 'rgba(255, 149, 0, 0.1)' }}>
-                    <p className="apple-caption font-medium mb-2" style={{ color: 'var(--apple-orange)' }}>
-                      ⚠️ Google/Apple ID Users
-                    </p>
-                    <p className="apple-caption text-gray-700">
-                      If you sign in with Google/Apple ID, try the API Key method instead (recommended).
-                    </p>
-                  </div>
-                  
-                  <ol className="space-y-2 apple-caption text-gray-700">
-                    <li className="flex">
-                      <span className="mr-2 font-medium">1.</span>
-                      <span>Use the same email and password you use to log into wyze.com</span>
-                    </li>
-                    <li className="flex">
-                      <span className="mr-2 font-medium">2.</span>
-                      <span>Make sure your cameras are online in the Wyze app</span>
-                    </li>
-                  </ol>
                 </div>
               )}
             </div>
@@ -499,9 +452,12 @@ export default function WyzeSettingsModal({ isOpen, onClose }: WyzeSettingsModal
                           </div>
                         </div>
                         
-                        {selectedCamera === camera.mac && (
-                          <CheckCircleIcon className="h-6 w-6 sf-icon" style={{ color: 'var(--apple-blue)' }} />
-                        )}
+                        <div className="flex items-center">
+                          {selectedCamera === camera.mac && (
+                            <CheckCircleIcon className="h-6 w-6 sf-icon mr-2" style={{ color: 'var(--apple-blue)' }} />
+                          )}
+                          <div className={`w-3 h-3 rounded-full ${camera.is_online ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        </div>
                       </div>
                     </div>
                   ))}

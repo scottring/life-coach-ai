@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { DogSOP, SOPLogEntry, LeaveSessionLog, DepartureParameterLog } from '../types/dogBehavior';
 import { DogBehaviorService } from '../services/dogBehaviorService';
-import { ClipboardDocumentListIcon, PlusIcon, PencilSquareIcon, HomeIcon, PlayIcon, CameraIcon } from '@heroicons/react/24/outline'; // Added PencilSquareIcon
+import { ClipboardDocumentListIcon, PlusIcon, PencilSquareIcon, HomeIcon, PlayIcon, SpeakerWaveIcon, ChartBarIcon } from '@heroicons/react/24/outline'; // Added PencilSquareIcon
 import LogSOPModal from './LogSOPModal';
 import EditSOPModal from './EditSOPModal';
 import ReturnHomeModal from './ReturnHomeModal';
 import DepartureParameterSelector from './DepartureParameterSelector';
 import WyzeSettingsModal from './WyzeSettingsModal';
+import SessionAnalytics from './SessionAnalytics';
 
 interface DogBehaviorWidgetProps {
   familyId: string;
@@ -27,6 +28,7 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
   const [isReturnHomeModalOpen, setIsReturnHomeModalOpen] = useState(false);
   const [showParameterSelector, setShowParameterSelector] = useState(false);
   const [showWyzeSettings, setShowWyzeSettings] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const fetchSOPs = async () => {
     try {
@@ -202,11 +204,18 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
         
         <div className="flex items-center space-x-2">
           <button 
+            onClick={() => setShowAnalytics(true)} 
+            className="p-2 rounded-full hover:bg-gray-100" 
+            title="View Session Analytics"
+          >
+            <ChartBarIcon className="h-6 w-6 text-gray-500" />
+          </button>
+          <button 
             onClick={() => setShowWyzeSettings(true)} 
             className="p-2 rounded-full hover:bg-gray-100" 
             title="Wyze Camera Settings"
           >
-            <CameraIcon className="h-6 w-6 text-gray-500" />
+            <SpeakerWaveIcon className="h-6 w-6 text-gray-500" />
           </button>
           <button onClick={handleAddNewSOP} className="p-2 rounded-full hover:bg-gray-100" title="Add new SOP">
             <PlusIcon className="h-6 w-6 text-gray-500" />
@@ -285,6 +294,11 @@ const DogBehaviorWidget: React.FC<DogBehaviorWidgetProps> = ({ familyId, userId 
       <WyzeSettingsModal
         isOpen={showWyzeSettings}
         onClose={() => setShowWyzeSettings(false)}
+      />
+      <SessionAnalytics
+        isOpen={showAnalytics}
+        onClose={() => setShowAnalytics(false)}
+        familyId={familyId}
       />
     </div>
   );

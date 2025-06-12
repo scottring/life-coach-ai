@@ -39,8 +39,8 @@ export default function ReturnHomeModal({ isOpen, onClose, session, onSessionCom
     setIsSubmitting(true);
 
     try {
-      // Complete Wyze monitoring first
-      await DogBehaviorService.completeWyzeMonitoring(session.id);
+      // Complete Wyze monitoring first (analyzes event history)
+      await DogBehaviorService.completeWyzeMonitoring(session.id, session.familyId);
       
       // Then save return observations
       await DogBehaviorService.completeLeaveSession(session.id, observations);

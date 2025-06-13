@@ -11,11 +11,12 @@ import { FamilyMember, DietaryRestriction } from '../types/mealPlanning';
 
 interface FamilyPreferencesModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (shouldRefresh?: boolean) => void;
   familyId: string;
+  memberToEdit?: FamilyMember | null;
 }
 
-export default function FamilyPreferencesModal({ isOpen, onClose, familyId }: FamilyPreferencesModalProps) {
+export default function FamilyPreferencesModal({ isOpen, onClose, familyId, memberToEdit }: FamilyPreferencesModalProps) {
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
@@ -33,6 +34,32 @@ export default function FamilyPreferencesModal({ isOpen, onClose, familyId }: Fa
       loadFamilyMembers();
     }
   }, [isOpen, familyId]);
+
+  useEffect(() => {
+    if (memberToEdit) {
+      // When editing from external source, go directly to edit mode
+      setEditingMember(memberToEdit);
+      setNewMember({
+        name: memberToEdit.name,
+        ageGroup: memberToEdit.ageGroup,
+        dietaryRestrictions: memberToEdit.dietaryRestrictions,
+        dislikedIngredients: memberToEdit.dislikedIngredients.join(', '),
+        allergens: memberToEdit.allergens.join(', ')
+      });
+      setShowAddMember(true);
+    } else {
+      // Reset form when not editing
+      setEditingMember(null);
+      setShowAddMember(false);
+      setNewMember({
+        name: '',
+        ageGroup: 'adult',
+        dietaryRestrictions: [] as DietaryRestriction[],
+        dislikedIngredients: '',
+        allergens: ''
+      });
+    }
+  }, [memberToEdit]);
 
   const loadFamilyMembers = async () => {
     setLoading(true);
@@ -167,143 +194,251 @@ export default function FamilyPreferencesModal({ isOpen, onClose, familyId }: Fa
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
-        
-        <div className="inline-block align-bottom apple-card rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle w-full max-w-4xl max-h-[80vh] flex flex-col" style={{ background: '#f5f5f7' }}>
-          {/* Fixed Header */}
-          <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4 flex-shrink-0" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <UserGroupIcon className="h-6 w-6 mr-3 sf-icon" style={{ color: 'var(--apple-blue)' }} />
-                <h2 className="apple-title text-xl text-gray-800">Family Preferences</h2>
-              </div>
-              <button
-                onClick={onClose}
-                className="text-gray-600 hover:text-gray-800 apple-transition p-2 rounded-lg hover:bg-gray-100/50"
-              >
-                <XMarkIcon className="w-6 h-6 sf-icon" />
-              </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => onClose()}></div>
+      
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden">
+        {/* Fixed Header */}
+        <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4 flex-shrink-0" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <UserGroupIcon className="h-6 w-6 mr-3 sf-icon" style={{ color: 'var(--apple-blue)' }} />
+              <h2 className="apple-title text-xl text-gray-800">Family Preferences</h2>
             </div>
+            <button
+              onClick={() => onClose()}
+              className="text-gray-600 hover:text-gray-800 apple-transition p-2 rounded-lg hover:bg-gray-100/50"
+            >
+              <XMarkIcon className="w-6 h-6 sf-icon" />
+            </button>
           </div>
-          
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto px-4 pb-4 sm:p-6" style={{ background: 'white' }}>
-            {/* Content */}
-            <div className="space-y-6">
-              {/* Add Family Member Button */}
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium text-gray-900">Family Members</h3>
-                <button
-                  onClick={() => setShowAddMember(true)}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
-                >
-                  <PlusIcon className="h-4 w-4 mr-2" />
-                  Add Member
-                </button>
-              </div>
+        </div>
+        
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4 sm:p-6" style={{ background: 'white' }}>
+          {/* Content */}
+          <div className="space-y-6">
+            {/* Show edit form directly if memberToEdit is provided, otherwise show member list */}
+            {memberToEdit ? (
+              // Direct edit mode - render form inline
+              <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Family Member</h3>
+                  
+                  <div className="space-y-4">
+                    {/* Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                      <input
+                        type="text"
+                        value={newMember.name}
+                        onChange={(e) => setNewMember(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter name"
+                      />
+                    </div>
 
-              {/* Family Members List */}
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                </div>
-              ) : familyMembers.length > 0 ? (
-                <div className="grid gap-4">
-                  {familyMembers.map(member => (
-                    <div key={member.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center space-x-3">
-                          <h4 className="font-medium text-gray-900">{member.name}</h4>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded capitalize">
-                            {member.ageGroup}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => editFamilyMember(member)}
-                            className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                            title="Edit member"
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteFamilyMember(member.id, member.name)}
-                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                            title="Delete member"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-500 font-medium">Favorite Foods:</span>
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {member.favoriteFoods.length > 0 ? (
-                              member.favoriteFoods.map(food => (
-                                <span key={food} className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
-                                  {food}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-gray-400 text-xs">None added yet</span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 font-medium">Dietary Restrictions:</span>
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {member.dietaryRestrictions.length > 0 ? (
-                              member.dietaryRestrictions.map(restriction => (
-                                <span key={restriction} className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">
-                                  {restriction}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-gray-400 text-xs">None</span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 font-medium">Allergens:</span>
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {member.allergens.length > 0 ? (
-                              member.allergens.map(allergen => (
-                                <span key={allergen} className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">
-                                  {allergen}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-gray-400 text-xs">None</span>
-                            )}
-                          </div>
-                        </div>
+                    {/* Age Group */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Age Group</label>
+                      <select
+                        value={newMember.ageGroup}
+                        onChange={(e) => setNewMember(prev => ({ ...prev, ageGroup: e.target.value as any }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="toddler">Toddler (1-3 years)</option>
+                        <option value="child">Child (4-12 years)</option>
+                        <option value="teen">Teen (13-17 years)</option>
+                        <option value="adult">Adult (18+ years)</option>
+                      </select>
+                    </div>
+
+                    {/* Dietary Restrictions */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Dietary Restrictions</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {['Vegetarian', 'Vegan', 'Gluten Free', 'Dairy Free', 'Keto', 'Low Carb'].map(restriction => (
+                          <label key={restriction} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={newMember.dietaryRestrictions.includes(restriction as DietaryRestriction)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNewMember(prev => ({ 
+                                    ...prev, 
+                                    dietaryRestrictions: [...prev.dietaryRestrictions, restriction as DietaryRestriction] 
+                                  }));
+                                } else {
+                                  setNewMember(prev => ({ 
+                                    ...prev, 
+                                    dietaryRestrictions: prev.dietaryRestrictions.filter(r => r !== restriction) 
+                                  }));
+                                }
+                              }}
+                              className="mr-2"
+                            />
+                            <span className="text-sm">{restriction}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
-                  ))}
+
+                    {/* Disliked Ingredients */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Disliked Ingredients</label>
+                      <input
+                        type="text"
+                        value={newMember.dislikedIngredients}
+                        onChange={(e) => setNewMember(prev => ({ ...prev, dislikedIngredients: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="mushrooms, olives, etc. (comma separated)"
+                      />
+                    </div>
+
+                    {/* Allergens */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Allergens</label>
+                      <input
+                        type="text"
+                        value={newMember.allergens}
+                        onChange={(e) => setNewMember(prev => ({ ...prev, allergens: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="nuts, shellfish, etc. (comma separated)"
+                      />
+                    </div>
+
+                    {/* Buttons */}
+                    <div className="flex justify-end space-x-3 pt-4">
+                      <button
+                        onClick={() => onClose()}
+                        className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSubmit}
+                        disabled={loading || !newMember.name.trim()}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300"
+                      >
+                        {loading ? 'Updating...' : 'Update Member'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="text-center py-8">
-                  <UserGroupIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No family members added yet</p>
-                  <button
-                    onClick={() => setShowAddMember(true)}
-                    className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                  >
-                    Add your first family member
-                  </button>
-                </div>
+                <>
+                  {/* Add Family Member Button */}
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-medium text-gray-900">Family Members</h3>
+                    <button
+                      onClick={() => setShowAddMember(true)}
+                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                    >
+                      <PlusIcon className="h-4 w-4 mr-2" />
+                      Add Member
+                    </button>
+                  </div>
+
+                  {/* Family Members List */}
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : familyMembers.length > 0 ? (
+                    <div className="grid gap-4">
+                      {familyMembers.map(member => (
+                        <div key={member.id} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center space-x-3">
+                              <h4 className="font-medium text-gray-900">{member.name}</h4>
+                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded capitalize">
+                                {member.ageGroup}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => editFamilyMember(member)}
+                                className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                title="Edit member"
+                              >
+                                <PencilIcon className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => deleteFamilyMember(member.id, member.name)}
+                                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                title="Delete member"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500 font-medium">Favorite Foods:</span>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {member.favoriteFoods.length > 0 ? (
+                                  member.favoriteFoods.map(food => (
+                                    <span key={food} className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
+                                      {food}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-gray-400 text-xs">None added yet</span>
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 font-medium">Dietary Restrictions:</span>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {member.dietaryRestrictions.length > 0 ? (
+                                  member.dietaryRestrictions.map(restriction => (
+                                    <span key={restriction} className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">
+                                      {restriction}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-gray-400 text-xs">None</span>
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 font-medium">Allergens:</span>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {member.allergens.length > 0 ? (
+                                  member.allergens.map(allergen => (
+                                    <span key={allergen} className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">
+                                      {allergen}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-gray-400 text-xs">None</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <UserGroupIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">No family members added yet</p>
+                      <button
+                        onClick={() => setShowAddMember(true)}
+                        className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                      >
+                        Add your first family member
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
-            </div>
           </div>
         </div>
       </div>
-
-      {/* Add Family Member Modal */}
-      {showAddMember && (
+      
+      {/* Add Family Member Modal - only show when not editing externally */}
+      {showAddMember && !memberToEdit && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">

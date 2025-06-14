@@ -22,7 +22,7 @@ interface AIResponse {
 }
 
 export class AIMealService {
-  private static apiKey = process.env.REACT_APP_OPENAI_API_KEY;
+  private static apiKey = (import.meta as any).env?.VITE_OPENAI_API_KEY;
   private static apiUrl = 'https://api.openai.com/v1/chat/completions';
 
   static async generateWeeklyMealPlan(request: MealGenerationRequest): Promise<AIResponse> {
@@ -146,13 +146,13 @@ export class AIMealService {
         const dayMeals: string[] = [];
         
         // Check which meals are needed for this day
-        if (familyMembers.some(member => availabilityGrid[member.id]?.[dateKey]?.breakfast)) {
+        if (familyMembers.some(member => request.availabilityGrid?.[member.id]?.[dateKey]?.breakfast)) {
           dayMeals.push('breakfast');
         }
-        if (familyMembers.some(member => availabilityGrid[member.id]?.[dateKey]?.lunch)) {
+        if (familyMembers.some(member => request.availabilityGrid?.[member.id]?.[dateKey]?.lunch)) {
           dayMeals.push('lunch');
         }
-        if (familyMembers.some(member => availabilityGrid[member.id]?.[dateKey]?.dinner)) {
+        if (familyMembers.some(member => request.availabilityGrid?.[member.id]?.[dateKey]?.dinner)) {
           dayMeals.push('dinner');
         }
         
@@ -164,7 +164,7 @@ export class AIMealService {
       prompt += `\nIMPORTANT: Only generate meals for the days and meal types listed above. Do not create meals for days or times not specified.\n`;
     }
 
-    prompt += `\nPlease create a balanced weekly meal plan (Monday-Sunday) with breakfast, lunch, and dinner for each day. 
+    prompt += `\nPlease create a meal plan ONLY for the specific days and meal types listed in the availability section above. 
     
 Format your response as a JSON object with this structure:
 {
@@ -187,12 +187,14 @@ Format your response as a JSON object with this structure:
   }
 }
 
-Ensure all meals are:
-1. Nutritionally balanced for the family
-2. Respect all dietary restrictions and allergens
-3. Include variety throughout the week
-4. Be practical to prepare
-5. Consider the family's preferences`;
+CRITICAL REQUIREMENTS:
+1. ONLY generate meals for the days and meal types specified in the availability section
+2. DO NOT create meals for days or meal types not listed
+3. Respect all dietary restrictions and allergens
+4. Include variety in the meals you do create
+5. Be practical to prepare
+6. Consider the family's preferences
+7. If no meals are requested for a day, do not include that day in the response`;
 
     return prompt;
   }
@@ -253,9 +255,18 @@ Ensure all meals are:
           
           hasAnyMealsForDay = mealsToGenerate.length > 0;
         } else {
-          // Fallback: generate all meals if no availability data
-          hasAnyMealsForDay = !!parsedPlan.meals[day];
-          mealsToGenerate = ['breakfast', 'lunch', 'dinner'];
+          // Fallback: only generate meals that exist in the AI response
+          if (parsedPlan.meals && parsedPlan.meals[day]) {
+            hasAnyMealsForDay = true;
+            // Only include meal types that actually exist in the response
+            mealsToGenerate = [];
+            if (parsedPlan.meals[day].breakfast) mealsToGenerate.push('breakfast');
+            if (parsedPlan.meals[day].lunch) mealsToGenerate.push('lunch');
+            if (parsedPlan.meals[day].dinner) mealsToGenerate.push('dinner');
+          } else {
+            hasAnyMealsForDay = false;
+            mealsToGenerate = [];
+          }
         }
         
         if (hasAnyMealsForDay && parsedPlan.meals[day]) {

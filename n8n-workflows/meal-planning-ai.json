@@ -1,0 +1,180 @@
+{
+  "name": "AI Meal Planning Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meal-plan",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Meal Plan Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "meal-planning-trigger"
+    },
+    {
+      "parameters": {
+        "operation": "extractFromArray",
+        "fieldName": "familyMembers",
+        "arrayPath": "familyMembers"
+      },
+      "id": "extract-family-data",
+      "name": "Extract Family Data",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build availability summary for AI prompt\nconst familyMembers = $input.all()[0].json.familyMembers;\nconst availabilityGrid = $input.all()[0].json.availabilityGrid;\nconst weekStartDate = $input.all()[0].json.weekStartDate;\nconst preferences = $input.all()[0].json.preferences || {};\nconst previousMeals = $input.all()[0].json.previousMeals || [];\n\n// Helper function to get day name\nfunction getDayName(date) {\n  return date.toLocaleDateString('en-US', { weekday: 'long' });\n}\n\n// Build family member descriptions\nlet familyDescription = '';\nfamilyMembers.forEach(member => {\n  familyDescription += `- ${member.name} (${member.ageGroup})\\n`;\n  if (member.dietaryRestrictions && member.dietaryRestrictions.length > 0) {\n    familyDescription += `  Dietary restrictions: ${member.dietaryRestrictions.join(', ')}\\n`;\n  }\n  if (member.allergens && member.allergens.length > 0) {\n    familyDescription += `  Allergens: ${member.allergens.join(', ')}\\n`;\n  }\n  if (member.favoriteFoods && member.favoriteFoods.length > 0) {\n    familyDescription += `  Favorite foods: ${member.favoriteFoods.join(', ')}\\n`;\n  }\n  if (member.dislikedIngredients && member.dislikedIngredients.length > 0) {\n    familyDescription += `  Dislikes: ${member.dislikedIngredients.join(', ')}\\n`;\n  }\n  familyDescription += '\\n';\n});\n\n// Build preferences section\nlet preferencesText = '';\nif (preferences.cuisinePreferences && preferences.cuisinePreferences.length > 0) {\n  preferencesText += `- Cuisine preferences: ${preferences.cuisinePreferences.join(', ')}\\n`;\n}\nif (preferences.avoidIngredients && preferences.avoidIngredients.length > 0) {\n  preferencesText += `- Avoid ingredients: ${preferences.avoidIngredients.join(', ')}\\n`;\n}\nif (preferences.budgetConstraints) {\n  preferencesText += `- Budget: ${preferences.budgetConstraints}\\n`;\n}\nif (preferences.cookingTime) {\n  preferencesText += `- Cooking time preference: ${preferences.cookingTime}\\n`;\n}\nif (preferences.healthFocus) {\n  preferencesText += `- Health focus: ${preferences.healthFocus}\\n`;\n}\n\n// Build previous meals section\nlet previousMealsText = '';\nif (previousMeals.length > 0) {\n  previousMealsText = '\\nRecently eaten meals to avoid repeating:\\n';\n  previousMeals.slice(0, 10).forEach(meal => {\n    previousMealsText += `- ${meal.name}\\n`;\n  });\n}\n\n// Build availability schedule\nlet availabilityText = '';\nlet requestedMealsStructure = {};\n\nif (availabilityGrid && Object.keys(availabilityGrid).length > 0) {\n  availabilityText = '\\nMeal availability (only generate meals for these specific times):\\n';\n  const weekStart = new Date(weekStartDate);\n  \n  for (let i = 0; i < 7; i++) {\n    const date = new Date(weekStart);\n    date.setDate(date.getDate() + i);\n    const dateKey = date.toISOString().split('T')[0];\n    const dayName = getDayName(date).toLowerCase();\n    \n    const dayMeals = [];\n    const dayMealsStructure = {};\n    \n    // Check which meals are needed for this day\n    const hasBreakfast = familyMembers.some(member => \n      availabilityGrid[member.id] && availabilityGrid[member.id][dateKey] && availabilityGrid[member.id][dateKey].breakfast\n    );\n    const hasLunch = familyMembers.some(member => \n      availabilityGrid[member.id] && availabilityGrid[member.id][dateKey] && availabilityGrid[member.id][dateKey].lunch\n    );\n    const hasDinner = familyMembers.some(member => \n      availabilityGrid[member.id] && availabilityGrid[member.id][dateKey] && availabilityGrid[member.id][dateKey].dinner\n    );\n    \n    if (hasBreakfast) {\n      dayMeals.push('breakfast');\n      dayMealsStructure.breakfast = {\"name\": \"Meal Name\", \"description\": \"Brief description\", \"prepTime\": 15, \"servings\": 4};\n    }\n    if (hasLunch) {\n      dayMeals.push('lunch');\n      dayMealsStructure.lunch = {\"name\": \"Meal Name\", \"description\": \"Brief description\", \"prepTime\": 30, \"servings\": 4};\n    }\n    if (hasDinner) {\n      dayMeals.push('dinner');\n      dayMealsStructure.dinner = {\"name\": \"Meal Name\", \"description\": \"Brief description\", \"prepTime\": 45, \"servings\": 4};\n    }\n    \n    if (dayMeals.length > 0) {\n      availabilityText += `- ${getDayName(date)} (${date.toLocaleDateString()}): ${dayMeals.join(', ')}\\n`;\n      requestedMealsStructure[dayName] = dayMealsStructure;\n    }\n  }\n  \n  availabilityText += '\\nIMPORTANT: Only generate meals for the days and meal types listed above. Do not create meals for days or times not specified.\\n';\n}\n\n// Build the complete prompt\nconst prompt = `Create a meal plan for a family with the following members:\n\n${familyDescription}${preferencesText ? `\\nAdditional preferences:\\n${preferencesText}` : ''}${previousMealsText}${availabilityText}\n\nPlease create a meal plan ONLY for the specific days and meal types listed in the availability section above.\n\nFormat your response as a JSON object with this EXACT structure (only include the days and meals that were requested):\n{\n  \"meals\": ${JSON.stringify(requestedMealsStructure, null, 4)},\n  \"shoppingList\": [\n    {\"item\": \"ingredient name\", \"quantity\": \"amount\", \"category\": \"produce/dairy/meat/etc\"},\n    ...\n  ],\n  \"nutritionSummary\": {\n    \"totalCaloriesPerDay\": 2000,\n    \"proteinBalance\": \"high/medium/low\",\n    \"notes\": \"Any important nutrition notes\"\n  }\n}\n\nCRITICAL REQUIREMENTS:\n1. ONLY generate meals for the days and meal types specified in the availability section\n2. DO NOT create meals for days or meal types not listed\n3. Respect all dietary restrictions and allergens\n4. Include variety in the meals you do create\n5. Be practical to prepare\n6. Consider the family's preferences\n7. If no meals are requested for a day, do not include that day in the response`;\n\nreturn {\n  prompt: prompt,\n  familyMembers: familyMembers,\n  weekStartDate: weekStartDate,\n  availabilityGrid: availabilityGrid,\n  requestedMealsStructure: requestedMealsStructure\n};"
+      },
+      "id": "build-prompt",
+      "name": "Build AI Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "create",
+        "model": "gpt-4",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a professional meal planning assistant. Generate practical, family-friendly meal plans that consider dietary restrictions, preferences, and nutrition balance. Always respond with valid JSON only."
+          },
+          {
+            "role": "user",
+            "content": "={{ $json.prompt }}"
+          }
+        ],
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        }
+      },
+      "id": "openai-meal-generation",
+      "name": "OpenAI Meal Generation",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-api",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse OpenAI response and convert to meal plan format\nconst aiResponse = $input.all()[0].json.choices[0].message.content;\nconst inputData = $input.all()[1].json; // From Build AI Prompt node\n\ntry {\n  // Extract JSON from AI response\n  const jsonMatch = aiResponse.match(/\\{[\\s\\S]*\\}/);\n  if (!jsonMatch) {\n    throw new Error('No JSON found in AI response');\n  }\n  \n  const parsedPlan = JSON.parse(jsonMatch[0]);\n  \n  // Convert to WeeklyMealPlan format\n  const weekStart = new Date(inputData.weekStartDate);\n  const weekEnd = new Date(weekStart);\n  weekEnd.setDate(weekEnd.getDate() + 6);\n  \n  const weeklyPlan = {\n    id: '', // Will be set when saved to database\n    familyId: inputData.familyMembers[0]?.familyId || '',\n    weekStartDate: inputData.weekStartDate,\n    weekEndDate: weekEnd.toISOString().split('T')[0],\n    dailyPlans: [],\n    estimatedCost: parsedPlan.nutritionSummary?.estimatedCost || Math.floor(Math.random() * 50) + 100,\n    generatedBy: 'ai',\n    createdAt: new Date(),\n    updatedAt: new Date()\n  };\n  \n  // Convert meals format to dailyPlans\n  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];\n  \n  days.forEach((day, index) => {\n    const date = new Date(weekStart);\n    date.setDate(date.getDate() + index);\n    const dateKey = date.toISOString().split('T')[0];\n    \n    if (parsedPlan.meals && parsedPlan.meals[day]) {\n      const meals = [];\n      \n      // Only include meals that were actually generated\n      if (parsedPlan.meals[day].breakfast) {\n        meals.push({\n          mealType: 'breakfast',\n          mealId: `ai_breakfast_${index}`,\n          servings: inputData.familyMembers.length,\n          notes: parsedPlan.meals[day].breakfast.name || 'AI Generated Breakfast'\n        });\n      }\n      \n      if (parsedPlan.meals[day].lunch) {\n        meals.push({\n          mealType: 'lunch',\n          mealId: `ai_lunch_${index}`,\n          servings: inputData.familyMembers.length,\n          notes: parsedPlan.meals[day].lunch.name || 'AI Generated Lunch'\n        });\n      }\n      \n      if (parsedPlan.meals[day].dinner) {\n        meals.push({\n          mealType: 'dinner',\n          mealId: `ai_dinner_${index}`,\n          servings: inputData.familyMembers.length,\n          notes: parsedPlan.meals[day].dinner.name || 'AI Generated Dinner'\n        });\n      }\n      \n      if (meals.length > 0) {\n        weeklyPlan.dailyPlans.push({\n          date: dateKey,\n          peopleEating: inputData.familyMembers.map(m => m.id),\n          meals: meals\n        });\n      }\n    }\n  });\n  \n  return {\n    success: true,\n    weeklyPlan: weeklyPlan,\n    aiResponseRaw: aiResponse,\n    parsedMeals: parsedPlan.meals,\n    shoppingList: parsedPlan.shoppingList || [],\n    nutritionSummary: parsedPlan.nutritionSummary || {}\n  };\n  \n} catch (error) {\n  console.error('Error parsing AI meal plan response:', error);\n  \n  // Fallback: create a basic plan if parsing fails\n  const weekStart = new Date(inputData.weekStartDate);\n  const weekEnd = new Date(weekStart);\n  weekEnd.setDate(weekEnd.getDate() + 6);\n  \n  const fallbackPlan = {\n    id: '',\n    familyId: inputData.familyMembers[0]?.familyId || '',\n    weekStartDate: inputData.weekStartDate,\n    weekEndDate: weekEnd.toISOString().split('T')[0],\n    dailyPlans: [\n      {\n        date: weekStart.toISOString().split('T')[0],\n        peopleEating: inputData.familyMembers.map(m => m.id),\n        meals: [\n          {\n            mealType: 'breakfast',\n            mealId: 'fallback_breakfast_0',\n            servings: inputData.familyMembers.length,\n            notes: 'Oatmeal with Berries'\n          },\n          {\n            mealType: 'lunch',\n            mealId: 'fallback_lunch_0',\n            servings: inputData.familyMembers.length,\n            notes: 'Turkey Sandwich'\n          },\n          {\n            mealType: 'dinner',\n            mealId: 'fallback_dinner_0',\n            servings: inputData.familyMembers.length,\n            notes: 'Grilled Chicken with Vegetables'\n          }\n        ]\n      }\n    ],\n    estimatedCost: 120,\n    generatedBy: 'ai',\n    createdAt: new Date(),\n    updatedAt: new Date()\n  };\n  \n  return {\n    success: false,\n    error: error.message,\n    weeklyPlan: fallbackPlan,\n    aiResponseRaw: aiResponse\n  };\n}"
+      },
+      "id": "parse-response",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS, GET"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "id": "webhook-response",
+      "name": "Return Meal Plan",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "extract-family-data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract-family-data": {
+      "main": [
+        [
+          {
+            "node": "build-prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "build-prompt": {
+      "main": [
+        [
+          {
+            "node": "openai-meal-generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "openai-meal-generation": {
+      "main": [
+        [
+          {
+            "node": "parse-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse-response": {
+      "main": [
+        [
+          {
+            "node": "webhook-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-06-14T01:50:00.000Z",
+  "versionId": "1"
+}

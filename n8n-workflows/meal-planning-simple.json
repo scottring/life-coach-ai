@@ -1,0 +1,73 @@
+{
+  "name": "Simple Meal Planning Test",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meal-plan",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Meal Plan Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "meal-planning-trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple test response\nconst input = $input.all()[0].json;\n\nreturn {\n  success: true,\n  message: 'Webhook working!',\n  receivedData: {\n    familyMembers: input.familyMembers?.length || 0,\n    weekStartDate: input.weekStartDate,\n    hasAvailabilityGrid: !!input.availabilityGrid\n  },\n  weeklyPlan: {\n    id: 'test-plan',\n    familyId: input.familyMembers?.[0]?.familyId || 'test-family',\n    weekStartDate: input.weekStartDate,\n    weekEndDate: input.weekStartDate,\n    dailyPlans: [\n      {\n        date: input.weekStartDate,\n        peopleEating: ['test-user'],\n        meals: [\n          {\n            mealType: 'breakfast',\n            mealId: 'test-breakfast',\n            servings: 1,\n            notes: 'Test Breakfast Meal'\n          }\n        ]\n      }\n    ],\n    estimatedCost: 25,\n    generatedBy: 'n8n-test',\n    createdAt: new Date(),\n    updatedAt: new Date()\n  }\n};"
+      },
+      "id": "simple-response",
+      "name": "Simple Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "webhook-response",
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "simple-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "simple-response": {
+      "main": [
+        [
+          {
+            "node": "webhook-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-06-14T02:45:00.000Z",
+  "versionId": "1"
+}

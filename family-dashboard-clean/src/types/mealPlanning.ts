@@ -109,6 +109,25 @@ export interface PlannedMeal {
   servings: number;
   notes?: string;
   prepAssignedTo?: string; // memberId
+  recipe?: {
+    name: string;
+    description: string;
+    prepTime: number;
+    cookTime: number;
+    totalTime: number;
+    difficulty: string;
+    cuisine: string;
+    ingredients: Array<{item: string; quantity: string; category: string}>;
+    instructions: Array<{step: number; instruction: string}>;
+    nutrition: {
+      calories: number;
+      protein: string;
+      carbs: string;
+      fat: string;
+      fiber: string;
+    };
+    tags: string[];
+  };
 }
 
 export interface WeeklyNutritionGoals {

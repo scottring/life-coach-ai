@@ -12,9 +12,13 @@ import {
   ChevronRightIcon
 } from '@heroicons/react/24/outline';
 import { MealPlanningService } from '../services/mealPlanningService';
-import { AIMealService } from '../services/aiMealService';
+import { N8nMealService } from '../services/n8nMealService';
 import { FamilyMember, WeeklyMealPlan } from '../types/mealPlanning';
+import { EnhancedMeal, MealRating } from '../types/recipe';
 import FamilyPreferencesModal from './FamilyPreferencesModal';
+import { MealCard } from './MealCard';
+import { MealDetailModal } from './MealDetailModal';
+import { CookModeModal } from './CookModeModal';
 
 interface MealPlanningModalProps {
   isOpen: boolean;
@@ -42,6 +46,12 @@ export default function MealPlanningModalWizard({ isOpen, onClose, familyId, use
     memberGoals: {} as {[memberId: string]: string}
   });
   const [availabilityGrid, setAvailabilityGrid] = useState<{[memberId: string]: {[dateKey: string]: {breakfast: boolean, lunch: boolean, dinner: boolean}}}>({});
+  
+  // New modal states
+  const [selectedMeal, setSelectedMeal] = useState<EnhancedMeal | null>(null);
+  const [selectedMealDate, setSelectedMealDate] = useState<string>('');
+  const [showMealDetail, setShowMealDetail] = useState(false);
+  const [showCookMode, setShowCookMode] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -203,7 +213,7 @@ export default function MealPlanningModalWizard({ isOpen, onClose, familyId, use
       }
 
       // Generate AI meal plan
-      const aiResponse = await AIMealService.generateWeeklyMealPlan({
+      const aiResponse = await N8nMealService.generateWeeklyMealPlan({
         familyMembers: selectedMembers,
         weekStartDate: weekStartStr,
         preferences,
@@ -217,6 +227,7 @@ export default function MealPlanningModalWizard({ isOpen, onClose, familyId, use
 
       console.log('AI Generated Daily Plans:', aiResponse.weeklyPlan.dailyPlans);
       console.log('AI Plan Dates:', aiResponse.weeklyPlan.dailyPlans.map(d => d.date));
+      console.log('First meal data:', aiResponse.weeklyPlan.dailyPlans[0]?.meals[0]);
       
       // The AI service now generates exactly what we need based on availability
       // No need for complex filtering - just use the AI response directly
@@ -342,6 +353,55 @@ export default function MealPlanningModalWizard({ isOpen, onClose, familyId, use
     });
     
     setAvailabilityGrid(newGrid);
+  };
+
+  // Meal interaction handlers  
+  const handleMealClick = (meal: any, date: string) => {
+    console.log('MealPlanningModal handleMealClick called:', meal, date);
+    setSelectedMeal(meal as EnhancedMeal);
+    setSelectedMealDate(date);
+    setShowMealDetail(true);
+    console.log('showMealDetail set to true');
+  };
+
+  const handleCloseMealDetail = () => {
+    setShowMealDetail(false);
+    setSelectedMeal(null);
+    setSelectedMealDate('');
+  };
+
+  const handleOpenCookMode = () => {
+    setShowMealDetail(false);
+    setShowCookMode(true);
+  };
+
+  const handleCloseCookMode = () => {
+    setShowCookMode(false);
+  };
+
+  const handleAddToGroceryList = async (ingredients: any[]) => {
+    try {
+      // Import the service dynamically to avoid circular dependencies
+      const { GroceryListService } = await import('../services/groceryListService');
+      
+      await GroceryListService.addIngredientsToGroceryList(
+        familyId,
+        ingredients,
+        userId,
+        selectedMeal?.mealId
+      );
+      
+      alert(`Added ${ingredients.length} ingredients to grocery list!`);
+    } catch (error) {
+      console.error('Error adding to grocery list:', error);
+      alert('Failed to add ingredients to grocery list');
+    }
+  };
+
+  const handleRateMeal = (rating: MealRating) => {
+    // TODO: Implement meal rating storage
+    console.log('Rating meal:', rating);
+    alert(`Thanks for rating this meal ${rating.rating} stars!`);
   };
 
   if (!isOpen) return null;
@@ -814,23 +874,14 @@ export default function MealPlanningModalWizard({ isOpen, onClose, familyId, use
                           <div className="text-gray-500 text-sm italic">No meals planned for this day</div>
                         ) : (
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {day.meals.map(meal => {
-                              const mealColors = {
-                                breakfast: 'bg-orange-50 border-orange-200 text-orange-900',
-                                lunch: 'bg-yellow-50 border-yellow-200 text-yellow-900',
-                                dinner: 'bg-purple-50 border-purple-200 text-purple-900'
-                              };
-                              
-                              return (
-                                <div key={`${day.date}-${meal.mealType}`} className={`p-4 border rounded-lg ${mealColors[meal.mealType as keyof typeof mealColors] || 'bg-gray-50 border-gray-200 text-gray-900'}`}>
-                                  <div className="font-medium capitalize text-lg mb-2">{meal.mealType}</div>
-                                  <div className="text-sm font-semibold mb-1">{meal.notes || 'Unnamed Meal'}</div>
-                                  <div className="text-xs opacity-75">
-                                    {meal.servings} serving{meal.servings !== 1 ? 's' : ''}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                            {day.meals.map(meal => (
+                              <MealCard
+                                key={`${day.date}-${meal.mealType}`}
+                                meal={meal as EnhancedMeal}
+                                date={day.date}
+                                onClick={() => handleMealClick(meal, day.date)}
+                              />
+                            ))}
                           </div>
                         )}
                       </div>
@@ -924,6 +975,28 @@ export default function MealPlanningModalWizard({ isOpen, onClose, familyId, use
             }
           }}
           familyId={familyId}
+        />
+      )}
+
+      {/* Meal Detail Modal */}
+      {selectedMeal && (
+        <MealDetailModal
+          meal={selectedMeal}
+          date={selectedMealDate}
+          isOpen={showMealDetail}
+          onClose={handleCloseMealDetail}
+          onOpenCookMode={handleOpenCookMode}
+          onAddToGroceryList={handleAddToGroceryList}
+          onRateMeal={handleRateMeal}
+        />
+      )}
+
+      {/* Cook Mode Modal */}
+      {selectedMeal && selectedMeal.recipe && (
+        <CookModeModal
+          recipe={selectedMeal.recipe}
+          isOpen={showCookMode}
+          onClose={handleCloseCookMode}
         />
       )}
     </div>

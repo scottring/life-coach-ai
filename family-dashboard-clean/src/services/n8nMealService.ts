@@ -20,6 +20,7 @@ interface N8nResponse {
   weeklyPlan?: WeeklyMealPlan;
   error?: string;
   aiResponseRaw?: string;
+  aiContent?: string;
   shoppingList?: any[];
   nutritionSummary?: any;
 }

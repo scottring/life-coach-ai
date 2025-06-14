@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { MealPlanningService } from '../services/mealPlanningService';
 import { N8nMealService } from '../services/n8nMealService';
+import { EnhancedAIMealService } from '../services/enhancedAIMealService';
 import { FamilyMember, WeeklyMealPlan } from '../types/mealPlanning';
 import { EnhancedMeal, MealRating } from '../types/recipe';
 import FamilyPreferencesModal from './FamilyPreferencesModal';
@@ -212,8 +213,8 @@ export default function MealPlanningModalWizard({ isOpen, onClose, familyId, use
         return;
       }
 
-      // Generate AI meal plan
-      const aiResponse = await N8nMealService.generateWeeklyMealPlan({
+      // Generate AI meal plan using direct OpenAI integration
+      const aiResponse = await EnhancedAIMealService.generateWeeklyMealPlan({
         familyMembers: selectedMembers,
         weekStartDate: weekStartStr,
         preferences,
@@ -227,10 +228,9 @@ export default function MealPlanningModalWizard({ isOpen, onClose, familyId, use
 
       console.log('AI Generated Daily Plans:', aiResponse.weeklyPlan.dailyPlans);
       console.log('AI Plan Dates:', aiResponse.weeklyPlan.dailyPlans.map(d => d.date));
-      console.log('First meal data:', aiResponse.weeklyPlan.dailyPlans[0]?.meals[0]);
+      console.log('Generated meal plan:', aiResponse.weeklyPlan);
       
-      // The AI service now generates exactly what we need based on availability
-      // No need for complex filtering - just use the AI response directly
+      // The AI service now generates exactly what we need with real recipes
       setGeneratedMealPlan(aiResponse.weeklyPlan);
       setCurrentStep('review');
     } catch (error) {

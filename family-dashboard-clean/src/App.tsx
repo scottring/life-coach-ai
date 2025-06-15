@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import FamilyDashboard from './components/FamilyDashboard';
+import ContextSwitcher from './components/ContextSwitcher';
+import { Context } from './types/context';
+import { contextService } from './services/contextService';
 
 function App() {
   const { user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut, error } = useAuth();
@@ -10,10 +13,34 @@ function App() {
   const [displayName, setDisplayName] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
+  const [activeContext, setActiveContext] = useState<Context | null>(null);
 
   // Demo mode for testing without authentication
   const demoUser = { id: 'demo-user', email: 'demo@example.com', name: 'Demo User' };
   const demoFamilyId = 'demo-family-123';
+
+  // Initialize user's default context when they log in
+  useEffect(() => {
+    const initializeUserContext = async () => {
+      if (user && !demoMode) {
+        try {
+          const contexts = await contextService.getContextsForUser(user.uid);
+          if (contexts.length === 0) {
+            // Create default family context for new users
+            await contextService.createDefaultFamilyContext(user.uid);
+          }
+        } catch (error) {
+          console.error('Error initializing user context:', error);
+        }
+      }
+    };
+
+    initializeUserContext();
+  }, [user, demoMode]);
+
+  const handleContextChange = (context: Context) => {
+    setActiveContext(context);
+  };
 
   if (loading) {
     return (
@@ -189,7 +216,6 @@ function App() {
   }
 
   const currentUser = user || demoUser;
-  const currentFamilyId = demoMode ? demoFamilyId : 'family-123'; // In real app, get from user's families
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -197,9 +223,17 @@ function App() {
       <header className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Family Dashboard</h1>
-              <p className="text-sm text-gray-600">Welcome back, {currentUser.name}!</p>
+            <div className="flex items-center space-x-6">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Life Coach AI</h1>
+                <p className="text-sm text-gray-600">Welcome back, {currentUser.name}!</p>
+              </div>
+              {!demoMode && (
+                <ContextSwitcher 
+                  userId={currentUser.id} 
+                  onContextChange={handleContextChange}
+                />
+              )}
             </div>
             <div className="flex items-center space-x-4">
               {demoMode && (
@@ -220,7 +254,20 @@ function App() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <FamilyDashboard familyId={currentFamilyId} userId={currentUser.id} />
+        {activeContext || demoMode ? (
+          <FamilyDashboard 
+            contextId={demoMode ? demoFamilyId : activeContext?.id || ''} 
+            userId={currentUser.id}
+            contextType={demoMode ? 'family' : activeContext?.type || 'family'}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <h3 className="text-lg font-medium text-gray-900">Select a context to get started</h3>
+              <p className="text-gray-500">Choose from the context switcher above</p>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

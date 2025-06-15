@@ -4,6 +4,7 @@ import MealPlannerWidget from './MealPlannerWidget';
 import DogBehaviorWidget from './DogBehaviorWidget';
 import TodoWidget from './TodoWidget';
 import MealPlanningModal from './MealPlanningModal';
+import { ContextType } from '../types/context';
 
 // Import the required CSS for react-grid-layout
 import 'react-grid-layout/css/styles.css';
@@ -12,11 +13,12 @@ import 'react-resizable/css/styles.css';
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 interface FamilyDashboardProps {
-  familyId: string;
+  contextId: string;
   userId: string;
+  contextType: ContextType;
 }
 
-const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) => {
+const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ contextId, userId, contextType }) => {
   const [showMealPlanner, setShowMealPlanner] = useState(false);
 
   const layouts = {
@@ -50,6 +52,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
         rowHeight={200}
         draggableHandle=".drag-handle"
       >
+{contextType === 'family' && (
         <div key="mealPlanner" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
                style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
@@ -62,12 +65,14 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
           </div>
           <div className="p-4" style={{ background: 'white' }}>
             <MealPlannerWidget 
-              familyId={familyId} 
+              familyId={contextId} 
               userId={userId} 
               onExpandToFullView={() => setShowMealPlanner(true)}
             />
           </div>
         </div>
+        )}
+{contextType === 'family' && (
         <div key="dogBehavior" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
                style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
@@ -79,9 +84,10 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
             </div>
           </div>
           <div className="p-4" style={{ background: 'white' }}>
-            <DogBehaviorWidget familyId={familyId} userId={userId} />
+            <DogBehaviorWidget familyId={contextId} userId={userId} />
           </div>
         </div>
+        )}
         <div key="events" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
                style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
@@ -107,18 +113,20 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ familyId, userId }) =
             </div>
           </div>
           <div className="p-4" style={{ background: 'white' }}>
-            <TodoWidget familyId={familyId} userId={userId} />
+            <TodoWidget familyId={contextId} userId={userId} />
           </div>
         </div>
       </ResponsiveGridLayout>
 
       {/* Meal Planning Modal */}
-      <MealPlanningModal 
-        isOpen={showMealPlanner}
-        onClose={() => setShowMealPlanner(false)}
-        familyId={familyId}
-        userId={userId}
-      />
+      {showMealPlanner && contextType === 'family' && (
+        <MealPlanningModal 
+          isOpen={showMealPlanner}
+          onClose={() => setShowMealPlanner(false)}
+          familyId={contextId}
+          userId={userId}
+        />
+      )}
     </div>
   );
 };

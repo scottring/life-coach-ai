@@ -6,12 +6,15 @@ import {
   PlayIcon,
   CheckCircleIcon,
   EllipsisVerticalIcon,
-  TagIcon
+  TagIcon,
+  PencilIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import { SOP, SOPCategory } from '../types/sop';
 import { ContextMember } from '../types/context';
-import { sopService, getCategoryColor } from '../services/sopService';
+import { sopService } from '../services/sopService';
 import { contextService } from '../services/contextService';
+import EditGeneralSOPModal from './EditGeneralSOPModal';
 
 interface SOPWidgetProps {
   contextId: string;
@@ -33,10 +36,23 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<SOPCategory | 'all'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingSOP, setEditingSOP] = useState<SOP | null>(null);
+  const [showDropdown, setShowDropdown] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
   }, [contextId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showDropdown && !(event.target as Element).closest('.relative')) {
+        setShowDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDropdown]);
 
   const loadData = async () => {
     try {
@@ -91,6 +107,34 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
       case 'hard': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const handleEditSOP = (sop: SOP) => {
+    setEditingSOP(sop);
+    setShowDropdown(null);
+  };
+
+  const handleDeleteSOP = async (sop: SOP) => {
+    if (window.confirm(`Are you sure you want to delete "${sop.name}"?`)) {
+      try {
+        await sopService.deleteSOP(sop.id);
+        loadData(); // Refresh the list
+      } catch (error) {
+        console.error('Error deleting SOP:', error);
+        alert('Failed to delete SOP. Please try again.');
+      }
+    }
+    setShowDropdown(null);
+  };
+
+  const handleSOPUpdated = () => {
+    loadData(); // Refresh the list
+    setEditingSOP(null);
+  };
+
+  const handleSOPDeleted = () => {
+    loadData(); // Refresh the list
+    setEditingSOP(null);
   };
 
   if (loading) {
@@ -185,7 +229,7 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
                     <h4 className="font-medium text-gray-900 truncate">{sop.name}</h4>
                     <div 
                       className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: getCategoryColor(sop.category) }}
+                      style={{ backgroundColor: sopService.getCategoryColor(sop.category) }}
                       title={sop.category}
                     />
                     <span className={`text-xs px-2 py-0.5 rounded-full ${getDifficultyColor(sop.difficulty)}`}>
@@ -256,13 +300,44 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
                     <span className="hidden sm:inline">Execute</span>
                   </button>
                   
-                  <button
-                    onClick={() => onEditSOP?.(sop)}
-                    className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
-                    title="Edit SOP"
-                  >
-                    <EllipsisVerticalIcon className="w-4 h-4" />
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowDropdown(showDropdown === sop.id ? null : sop.id)}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
+                      title="More actions"
+                    >
+                      <EllipsisVerticalIcon className="w-4 h-4" />
+                    </button>
+                    
+                    {showDropdown === sop.id && (
+                      <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+                        <div className="py-1">
+                          <button
+                            onClick={() => handleEditSOP(sop)}
+                            className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                            <span>Edit SOP</span>
+                          </button>
+                          <button
+                            onClick={() => onExecuteSOP?.(sop)}
+                            className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <PlayIcon className="w-4 h-4" />
+                            <span>Execute Now</span>
+                          </button>
+                          <div className="border-t border-gray-100 my-1"></div>
+                          <button
+                            onClick={() => handleDeleteSOP(sop)}
+                            className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                            <span>Delete SOP</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -286,7 +361,7 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
                 >
                   <div 
                     className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: getCategoryColor(sop.category) }}
+                    style={{ backgroundColor: sopService.getCategoryColor(sop.category) }}
                   />
                   <span>{sop.name}</span>
                   <ClockIcon className="w-3 h-3 text-gray-400" />
@@ -295,6 +370,19 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
               ))}
           </div>
         </div>
+      )}
+
+      {/* Edit SOP Modal */}
+      {editingSOP && (
+        <EditGeneralSOPModal
+          isOpen={!!editingSOP}
+          onClose={() => setEditingSOP(null)}
+          sop={editingSOP}
+          contextId={contextId}
+          userId={userId}
+          onSOPUpdated={handleSOPUpdated}
+          onSOPDeleted={handleSOPDeleted}
+        />
       )}
     </div>
   );

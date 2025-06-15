@@ -14,7 +14,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { SOP, SOPCompletion, SOPTemplate, SOPStep, SOPCategory } from '../types/sop';
+import { SOP, SOPCompletion, SOPTemplate, SOPStep, SOPCategory, SOPStepType } from '../types/sop';
 
 // Helper function to convert Firestore timestamp to Date
 const timestampToDate = (timestamp: any): Date => {
@@ -30,13 +30,71 @@ const timestampToDate = (timestamp: any): Date => {
 // Generate unique step IDs
 const generateStepId = () => `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-// Calculate total duration from steps
-const calculateTotalDuration = (steps: SOPStep[]): number => {
-  return steps.reduce((total, step) => total + step.estimatedDuration, 0);
+// Calculate total duration from steps (including embedded SOPs)
+const calculateTotalDuration = async (steps: SOPStep[]): Promise<number> => {
+  let total = 0;
+  
+  for (const step of steps) {
+    if (step.type === 'embedded_sop' && step.embeddedSOPId) {
+      // Get embedded SOP duration
+      const embeddedSOP = await getSOPByIdInternal(step.embeddedSOPId);
+      if (embeddedSOP) {
+        total += step.embeddedSOPOverrides?.estimatedDuration ?? embeddedSOP.estimatedDuration;
+      } else {
+        // Fallback to step's own duration if embedded SOP not found
+        total += step.estimatedDuration;
+      }
+    } else {
+      total += step.estimatedDuration;
+    }
+  }
+  
+  return total;
+};
+
+// Helper function to get SOP by ID (for internal use)
+const getSOPByIdInternal = async (sopId: string): Promise<SOP | null> => {
+  try {
+    const sopDoc = await getDoc(doc(db, 'sops', sopId));
+    if (!sopDoc.exists()) return null;
+    
+    const data = sopDoc.data();
+    return {
+      id: sopDoc.id,
+      contextId: data.contextId,
+      name: data.name,
+      description: data.description,
+      category: data.category,
+      tags: data.tags || [],
+      estimatedDuration: data.estimatedDuration,
+      difficulty: data.difficulty,
+      status: data.status,
+      assignableMembers: data.assignableMembers || [],
+      defaultAssignee: data.defaultAssignee,
+      requiresConfirmation: data.requiresConfirmation || false,
+      canBeEmbedded: data.canBeEmbedded || false,
+      isStandalone: data.isStandalone !== false, // Default to true
+      embeddedSOPs: data.embeddedSOPs || [],
+      steps: data.steps || [],
+      executionOrder: data.executionOrder || 'sequential',
+      isRecurring: data.isRecurring || false,
+      recurrence: data.recurrence,
+      averageCompletionTime: data.averageCompletionTime,
+      completionRate: data.completionRate,
+      lastOptimized: data.lastOptimized ? timestampToDate(data.lastOptimized) : undefined,
+      createdBy: data.createdBy,
+      createdAt: timestampToDate(data.createdAt),
+      updatedAt: timestampToDate(data.updatedAt),
+      version: data.version || 1
+    };
+  } catch (error) {
+    console.error('Error fetching SOP:', error);
+    return null;
+  }
 };
 
 // Get category color for UI
-export const getCategoryColor = (category: SOPCategory): string => {
+const getCategoryColor = (category: SOPCategory): string => {
   const colors = {
     morning: '#F59E0B',     // amber
     evening: '#6366F1',     // indigo
@@ -50,21 +108,41 @@ export const getCategoryColor = (category: SOPCategory): string => {
 };
 
 export const sopService = {
+  getCategoryColor,
   // Create a new SOP
   async createSOP(
     contextId: string,
     sopData: Omit<SOP, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'estimatedDuration'>
   ): Promise<SOP> {
-    // Generate IDs for steps
+    // Generate IDs for steps and ensure they have the type property
     const stepsWithIds = sopData.steps.map(step => ({
       ...step,
-      id: generateStepId()
+      id: generateStepId(),
+      type: step.type || 'standard' as SOPStepType
     }));
     
-    const totalDuration = calculateTotalDuration(stepsWithIds);
+    const totalDuration = await calculateTotalDuration(stepsWithIds);
     
-    const docData = {
+    // Collect embedded SOP IDs
+    const embeddedSOPIds = stepsWithIds
+      .filter(step => step.type === 'embedded_sop' && step.embeddedSOPId)
+      .map(step => step.embeddedSOPId!);
+    
+    // Set defaults for new embedding properties
+    const enhancedSopData = {
       ...sopData,
+      canBeEmbedded: sopData.canBeEmbedded ?? true,
+      isStandalone: sopData.isStandalone ?? true,
+      embeddedSOPs: embeddedSOPIds
+    };
+    
+    // Filter out undefined values for Firestore
+    const cleanedSopData = Object.fromEntries(
+      Object.entries(enhancedSopData).filter(([_, value]) => value !== undefined)
+    );
+
+    const docData = {
+      ...cleanedSopData,
       contextId,
       steps: stepsWithIds,
       estimatedDuration: totalDuration,
@@ -77,7 +155,7 @@ export const sopService = {
     
     return {
       id: sopRef.id,
-      ...sopData,
+      ...enhancedSopData,
       contextId,
       steps: stepsWithIds,
       estimatedDuration: totalDuration,
@@ -91,16 +169,12 @@ export const sopService = {
   async getSOPsForContext(contextId: string): Promise<SOP[]> {
     const sopsQuery = query(
       collection(db, 'sops'),
-      where('contextId', '==', contextId),
-      where('status', '!=', 'archived'),
-      orderBy('status', 'asc'),
-      orderBy('category', 'asc'),
-      orderBy('name', 'asc')
+      where('contextId', '==', contextId)
     );
     
     const snapshot = await getDocs(sopsQuery);
     
-    return snapshot.docs.map(doc => {
+    const sops = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -115,6 +189,9 @@ export const sopService = {
         assignableMembers: data.assignableMembers || [],
         defaultAssignee: data.defaultAssignee,
         requiresConfirmation: data.requiresConfirmation || false,
+        canBeEmbedded: data.canBeEmbedded || false,
+        isStandalone: data.isStandalone !== false, // Default to true
+        embeddedSOPs: data.embeddedSOPs || [],
         steps: data.steps || [],
         executionOrder: data.executionOrder || 'sequential',
         isRecurring: data.isRecurring || false,
@@ -128,6 +205,20 @@ export const sopService = {
         version: data.version || 1
       };
     });
+
+    // Filter and sort in JavaScript instead of database
+    return sops
+      .filter(sop => sop.status !== 'archived')
+      .sort((a, b) => {
+        // Sort by status, then category, then name
+        if (a.status !== b.status) {
+          return a.status.localeCompare(b.status);
+        }
+        if (a.category !== b.category) {
+          return a.category.localeCompare(b.category);
+        }
+        return a.name.localeCompare(b.name);
+      });
   },
 
   // Get SOPs by category
@@ -135,14 +226,12 @@ export const sopService = {
     const sopsQuery = query(
       collection(db, 'sops'),
       where('contextId', '==', contextId),
-      where('category', '==', category),
-      where('status', '==', 'active'),
-      orderBy('name', 'asc')
+      where('category', '==', category)
     );
     
     const snapshot = await getDocs(sopsQuery);
     
-    return snapshot.docs.map(doc => {
+    const sops = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -157,6 +246,9 @@ export const sopService = {
         assignableMembers: data.assignableMembers || [],
         defaultAssignee: data.defaultAssignee,
         requiresConfirmation: data.requiresConfirmation || false,
+        canBeEmbedded: data.canBeEmbedded || false,
+        isStandalone: data.isStandalone !== false, // Default to true
+        embeddedSOPs: data.embeddedSOPs || [],
         steps: data.steps || [],
         executionOrder: data.executionOrder || 'sequential',
         isRecurring: data.isRecurring || false,
@@ -170,6 +262,50 @@ export const sopService = {
         version: data.version || 1
       };
     });
+
+    // Filter and sort in JavaScript
+    return sops
+      .filter(sop => sop.status === 'active')
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+
+  // Get SOPs that can be embedded
+  async getEmbeddableSOPs(contextId: string): Promise<SOP[]> {
+    const sops = await this.getSOPsForContext(contextId);
+    return sops.filter(sop => sop.canBeEmbedded && sop.status === 'active');
+  },
+
+  // Get detailed steps for a SOP (expanding embedded SOPs)
+  async getExpandedSteps(sopId: string): Promise<SOPStep[]> {
+    const sop = await this.getSOPById(sopId);
+    if (!sop) return [];
+
+    const expandedSteps: SOPStep[] = [];
+    
+    for (const step of sop.steps) {
+      if (step.type === 'embedded_sop' && step.embeddedSOPId) {
+        const embeddedSOP = await getSOPByIdInternal(step.embeddedSOPId);
+        if (embeddedSOP) {
+          // Add the embedded SOP's steps with prefixed titles
+          const embeddedSteps = embeddedSOP.steps.map((embeddedStep, index) => ({
+            ...embeddedStep,
+            id: `${step.id}_embedded_${embeddedStep.id}`,
+            stepNumber: index + 1,
+            title: `${step.title}: ${embeddedStep.title}`,
+            parentStepId: step.id,
+            isEmbedded: true
+          }));
+          expandedSteps.push(...embeddedSteps);
+        } else {
+          // If embedded SOP not found, keep the original step
+          expandedSteps.push(step);
+        }
+      } else {
+        expandedSteps.push(step);
+      }
+    }
+
+    return expandedSteps;
   },
 
   // Update an SOP
@@ -181,12 +317,55 @@ export const sopService = {
     
     // Recalculate duration if steps were updated
     if (updates.steps) {
-      updateData.estimatedDuration = calculateTotalDuration(updates.steps);
+      updateData.estimatedDuration = await calculateTotalDuration(updates.steps);
       updateData.version = (updates.version || 1) + 1;
+      
+      // Update embedded SOPs list
+      const embeddedSOPIds = updates.steps
+        .filter(step => step.type === 'embedded_sop' && step.embeddedSOPId)
+        .map(step => step.embeddedSOPId!);
+      updateData.embeddedSOPs = embeddedSOPIds;
     }
     
     const sopRef = doc(db, 'sops', sopId);
     await updateDoc(sopRef, updateData);
+  },
+
+  // Get a single SOP by ID
+  async getSOPById(sopId: string): Promise<SOP | null> {
+    const sopDoc = await getDoc(doc(db, 'sops', sopId));
+    
+    if (!sopDoc.exists()) return null;
+    
+    const data = sopDoc.data();
+    return {
+      id: sopDoc.id,
+      contextId: data.contextId,
+      name: data.name,
+      description: data.description,
+      category: data.category,
+      tags: data.tags || [],
+      estimatedDuration: data.estimatedDuration,
+      difficulty: data.difficulty,
+      status: data.status,
+      assignableMembers: data.assignableMembers || [],
+      defaultAssignee: data.defaultAssignee,
+      requiresConfirmation: data.requiresConfirmation || false,
+      canBeEmbedded: data.canBeEmbedded || false,
+      isStandalone: data.isStandalone !== false, // Default to true
+      embeddedSOPs: data.embeddedSOPs || [],
+      steps: data.steps || [],
+      executionOrder: data.executionOrder || 'sequential',
+      isRecurring: data.isRecurring || false,
+      recurrence: data.recurrence,
+      averageCompletionTime: data.averageCompletionTime,
+      completionRate: data.completionRate,
+      lastOptimized: data.lastOptimized ? timestampToDate(data.lastOptimized) : undefined,
+      createdBy: data.createdBy,
+      createdAt: timestampToDate(data.createdAt),
+      updatedAt: timestampToDate(data.updatedAt),
+      version: data.version || 1
+    };
   },
 
   // Delete an SOP (soft delete by archiving)
@@ -196,6 +375,11 @@ export const sopService = {
       status: 'archived',
       updatedAt: serverTimestamp()
     });
+  },
+
+  // Permanently delete an SOP (hard delete)
+  async permanentlyDeleteSOP(sopId: string): Promise<void> {
+    await deleteDoc(doc(db, 'sops', sopId));
   },
 
   // Create SOP completion (scheduled or immediate)
@@ -324,7 +508,8 @@ export const sopService = {
     const steps: SOPStep[] = template.steps.map((step, index) => ({
       ...step,
       id: generateStepId(),
-      stepNumber: index + 1
+      stepNumber: index + 1,
+      type: 'standard' as SOPStepType
     }));
     
     const sopData: Omit<SOP, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'estimatedDuration'> = {
@@ -338,6 +523,9 @@ export const sopService = {
       assignableMembers: customizations?.assignableMembers || [],
       defaultAssignee: customizations?.defaultAssignee,
       requiresConfirmation: false,
+      canBeEmbedded: true,
+      isStandalone: true,
+      embeddedSOPs: [],
       steps,
       executionOrder: 'sequential',
       isRecurring: false,

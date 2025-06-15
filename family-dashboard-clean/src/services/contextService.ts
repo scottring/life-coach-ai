@@ -113,8 +113,7 @@ export const contextService = {
   async getContextsForUser(userId: string): Promise<Context[]> {
     const accessQuery = query(
       collection(db, 'user_context_access'),
-      where('userId', '==', userId),
-      orderBy('lastAccessedAt', 'desc')
+      where('userId', '==', userId)
     );
     
     const accessSnapshot = await getDocs(accessQuery);
@@ -139,7 +138,8 @@ export const contextService = {
       }
     }
     
-    return contexts;
+    // Sort contexts by name in JavaScript instead of database
+    return contexts.sort((a, b) => a.name.localeCompare(b.name));
   },
 
   // Get active context for user

@@ -4,6 +4,7 @@ import MealPlannerWidget from './MealPlannerWidget';
 import DogBehaviorWidget from './DogBehaviorWidget';
 import TodoWidget from './TodoWidget';
 import SOPWidget from './SOPWidget';
+import WeeklyCalendarWidget from './WeeklyCalendarWidget';
 import CreateSOPModal from './CreateSOPModal';
 import MealPlanningModal from './MealPlanningModal';
 import { ContextType } from '../types/context';
@@ -23,28 +24,29 @@ interface FamilyDashboardProps {
 const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ contextId, userId, contextType }) => {
   const [showMealPlanner, setShowMealPlanner] = useState(false);
   const [showCreateSOP, setShowCreateSOP] = useState(false);
+  const [sopRefreshKey, setSOPRefreshKey] = useState(0);
 
   const layouts = {
     lg: [
-      { i: 'sops', x: 0, y: 0, w: 2, h: 3, minW: 2, minH: 2 },
-      { i: 'mealPlanner', x: 2, y: 0, w: 1, h: 2, minW: 1, minH: 2 },
-      { i: 'dogBehavior', x: 2, y: 2, w: 1, h: 2, minW: 1, minH: 2 },
-      { i: 'events', x: 0, y: 3, w: 1, h: 1 },
-      { i: 'todos', x: 1, y: 3, w: 1, h: 1 },
+      { i: 'weeklyCalendar', x: 0, y: 0, w: 3, h: 4, minW: 3, minH: 3 },
+      { i: 'sops', x: 0, y: 4, w: 2, h: 3, minW: 2, minH: 2 },
+      { i: 'mealPlanner', x: 2, y: 4, w: 1, h: 2, minW: 1, minH: 2 },
+      { i: 'dogBehavior', x: 2, y: 6, w: 1, h: 2, minW: 1, minH: 2 },
+      { i: 'todos', x: 0, y: 7, w: 2, h: 1 },
     ],
     md: [
-      { i: 'sops', x: 0, y: 0, w: 2, h: 3, minW: 2, minH: 2 },
-      { i: 'mealPlanner', x: 0, y: 3, w: 2, h: 2, minW: 2, minH: 2 },
-      { i: 'dogBehavior', x: 0, y: 5, w: 2, h: 2, minW: 1, minH: 2 },
-      { i: 'events', x: 0, y: 7, w: 1, h: 1 },
-      { i: 'todos', x: 1, y: 7, w: 1, h: 1 },
+      { i: 'weeklyCalendar', x: 0, y: 0, w: 2, h: 4, minW: 2, minH: 3 },
+      { i: 'sops', x: 0, y: 4, w: 2, h: 3, minW: 2, minH: 2 },
+      { i: 'mealPlanner', x: 0, y: 7, w: 2, h: 2, minW: 2, minH: 2 },
+      { i: 'dogBehavior', x: 0, y: 9, w: 2, h: 2, minW: 1, minH: 2 },
+      { i: 'todos', x: 0, y: 11, w: 2, h: 1 },
     ],
     sm: [
-      { i: 'sops', x: 0, y: 0, w: 1, h: 3 },
-      { i: 'mealPlanner', x: 0, y: 3, w: 1, h: 2 },
-      { i: 'dogBehavior', x: 0, y: 5, w: 1, h: 2 },
-      { i: 'events', x: 0, y: 7, w: 1, h: 1 },
-      { i: 'todos', x: 0, y: 8, w: 1, h: 1 },
+      { i: 'weeklyCalendar', x: 0, y: 0, w: 1, h: 4 },
+      { i: 'sops', x: 0, y: 4, w: 1, h: 3 },
+      { i: 'mealPlanner', x: 0, y: 7, w: 1, h: 2 },
+      { i: 'dogBehavior', x: 0, y: 9, w: 1, h: 2 },
+      { i: 'todos', x: 0, y: 11, w: 1, h: 1 },
     ],
   };
 
@@ -58,6 +60,29 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ contextId, userId, co
         rowHeight={200}
         draggableHandle=".drag-handle"
       >
+        {/* Weekly Calendar Widget - Available for all context types */}
+        <div key="weeklyCalendar" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
+               style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+            <h3 className="apple-subtitle text-gray-800">Weekly Planning Calendar</h3>
+            <div className="drag-handle cursor-move p-2 hover:bg-gray-100/50 rounded-lg apple-transition">
+              <svg className="w-4 h-4 text-gray-600 sf-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+              </svg>
+            </div>
+          </div>
+          <div className="p-4" style={{ background: 'white' }}>
+            <WeeklyCalendarWidget 
+              key={`calendar-${sopRefreshKey}`}
+              contextId={contextId} 
+              userId={userId}
+              onEventClick={(event) => console.log('Event clicked:', event)}
+              onSOPDrop={(sop, date, time) => console.log('SOP dropped:', sop, date, time)}
+              onCreateEvent={(date, time) => console.log('Create event:', date, time)}
+            />
+          </div>
+        </div>
+
         {/* SOP Widget - Available for all context types */}
         <div key="sops" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
@@ -71,6 +96,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ contextId, userId, co
           </div>
           <div className="p-4" style={{ background: 'white' }}>
             <SOPWidget 
+              key={sopRefreshKey}
               contextId={contextId} 
               userId={userId}
               onCreateSOP={() => setShowCreateSOP(true)}
@@ -116,20 +142,6 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ contextId, userId, co
           </div>
         </div>
         )}
-        <div key="events" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
-               style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
-            <h3 className="apple-subtitle text-gray-800">Upcoming Events</h3>
-            <div className="drag-handle cursor-move p-2 hover:bg-gray-100/50 rounded-lg apple-transition">
-              <svg className="w-4 h-4 text-gray-600 sf-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-              </svg>
-            </div>
-          </div>
-          <div className="p-6" style={{ background: 'white' }}>
-            <p className="apple-body text-gray-800">No events scheduled.</p>
-          </div>
-        </div>
         <div key="todos" className="apple-card overflow-hidden" style={{ background: '#f5f5f7' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50" 
                style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
@@ -163,7 +175,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ contextId, userId, co
         userId={userId}
         onSOPCreated={() => {
           setShowCreateSOP(false);
-          // Optionally trigger a refresh of the SOP widget
+          setSOPRefreshKey(prev => prev + 1); // Force SOPWidget to refresh
         }}
       />
     </div>

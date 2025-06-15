@@ -19,7 +19,33 @@ const ContextSwitcher: React.FC<ContextSwitcherProps> = ({ userId, onContextChan
   const [newContextType, setNewContextType] = useState<ContextType>('personal');
 
   useEffect(() => {
-    loadContexts();
+    if (userId === 'demo-user') {
+      // Create demo context for demo mode
+      const demoContext: Context = {
+        id: 'demo-family-123',
+        name: 'Demo Family',
+        type: 'family',
+        description: 'Demo family context',
+        ownerId: 'demo-user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        settings: {
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          workingHours: { start: '05:00', end: '22:00' },
+          weekStartsOn: 1,
+          defaultCalendarView: '15min',
+          colorScheme: '#3B82F6',
+          enableSOPs: true,
+          enableMealPlanning: true,
+          enableTaskTracking: true
+        }
+      };
+      setContexts([demoContext]);
+      setActiveContext(demoContext);
+      onContextChange(demoContext);
+    } else {
+      loadContexts();
+    }
   }, [userId]);
 
   const loadContexts = async () => {
@@ -93,11 +119,17 @@ const ContextSwitcher: React.FC<ContextSwitcherProps> = ({ userId, onContextChan
     }
   };
 
-  if (!activeContext) {
+  if (!activeContext && contexts.length === 0) {
     return (
-      <div className="animate-pulse bg-gray-200 rounded-lg px-4 py-2 w-48 h-10"></div>
+      <div className="animate-pulse bg-gray-200 rounded-lg px-4 py-2 w-48 h-10 flex items-center">
+        <div className="bg-gray-300 rounded w-6 h-6 mr-2"></div>
+        <div className="text-sm text-gray-600">Loading contexts...</div>
+      </div>
     );
   }
+
+  // If we have contexts but no active context, use the first one
+  const displayContext = activeContext || contexts[0];
 
   return (
     <div className="relative">
@@ -106,11 +138,11 @@ const ContextSwitcher: React.FC<ContextSwitcherProps> = ({ userId, onContextChan
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center space-x-2 px-4 py-2 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors shadow-sm"
       >
-        <span className="text-lg">{getContextIcon(activeContext.type)}</span>
+        <span className="text-lg">{getContextIcon(displayContext?.type || 'family')}</span>
         <div className="text-left">
-          <div className="font-medium text-gray-900">{activeContext.name}</div>
-          <div className={`text-xs px-2 py-0.5 rounded-full ${getContextColor(activeContext.type)}`}>
-            {activeContext.type}
+          <div className="font-medium text-gray-900">{displayContext?.name || 'Loading...'}</div>
+          <div className={`text-xs px-2 py-0.5 rounded-full ${getContextColor(displayContext?.type || 'family')}`}>
+            {displayContext?.type || 'family'}
           </div>
         </div>
         <ChevronDownIcon className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -130,7 +162,7 @@ const ContextSwitcher: React.FC<ContextSwitcherProps> = ({ userId, onContextChan
                 key={context.id}
                 onClick={() => handleContextSwitch(context)}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-left hover:bg-gray-50 transition-colors ${
-                  context.id === activeContext.id ? 'bg-blue-50 border-l-2 border-blue-500' : ''
+                  context.id === displayContext?.id ? 'bg-blue-50 border-l-2 border-blue-500' : ''
                 }`}
               >
                 <span className="text-lg">{getContextIcon(context.type)}</span>

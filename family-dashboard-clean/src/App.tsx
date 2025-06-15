@@ -24,10 +24,10 @@ function App() {
     const initializeUserContext = async () => {
       if (user && !demoMode) {
         try {
-          const contexts = await contextService.getContextsForUser(user.uid);
+          const contexts = await contextService.getContextsForUser(user.id);
           if (contexts.length === 0) {
             // Create default family context for new users
-            await contextService.createDefaultFamilyContext(user.uid);
+            await contextService.createDefaultFamilyContext(user.id);
           }
         } catch (error) {
           console.error('Error initializing user context:', error);
@@ -228,7 +228,7 @@ function App() {
                 <h1 className="text-3xl font-bold text-gray-900">Life Coach AI</h1>
                 <p className="text-sm text-gray-600">Welcome back, {currentUser.name}!</p>
               </div>
-              {!demoMode && (
+              {(user || demoMode) && (
                 <ContextSwitcher 
                   userId={currentUser.id} 
                   onContextChange={handleContextChange}

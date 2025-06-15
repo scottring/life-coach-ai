@@ -4,6 +4,8 @@ export type SOPCategory = 'morning' | 'evening' | 'leaving' | 'cleanup' | 'meal-
 export type SOPDifficulty = 'easy' | 'medium' | 'hard';
 export type SOPStatus = 'draft' | 'active' | 'archived';
 
+export type SOPStepType = 'standard' | 'embedded_sop';
+
 export interface SOPStep {
   id: string;
   stepNumber: number;
@@ -13,6 +15,19 @@ export interface SOPStep {
   isOptional: boolean;
   dependencies?: string[]; // stepIds that must be completed first
   notes?: string;
+  
+  // For embedded SOPs
+  type: SOPStepType;
+  embeddedSOPId?: string; // Reference to another SOP
+  embeddedSOPOverrides?: {
+    assignedTo?: string; // Override the embedded SOP's default assignee
+    skipSteps?: string[]; // Skip specific steps in the embedded SOP
+    estimatedDuration?: number; // Override duration if different in this context
+  };
+  
+  // For expanded view (runtime properties)
+  parentStepId?: string; // ID of the parent step when this is from an embedded SOP
+  isEmbedded?: boolean; // True if this step comes from an embedded SOP
 }
 
 export interface SOP {
@@ -30,6 +45,11 @@ export interface SOP {
   assignableMembers: string[]; // member IDs who can be assigned this SOP
   defaultAssignee?: string; // default member ID
   requiresConfirmation: boolean; // does completion need confirmation?
+  
+  // Embedding properties
+  canBeEmbedded: boolean; // can this SOP be embedded in other SOPs?
+  isStandalone: boolean; // can this SOP be executed independently?
+  embeddedSOPs?: string[]; // IDs of SOPs that are embedded in this one
   
   // Steps and execution
   steps: SOPStep[];

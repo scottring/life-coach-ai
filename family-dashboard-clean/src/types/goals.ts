@@ -163,4 +163,5 @@ export interface SchedulableItem {
   isRecurring: boolean;
   contextId: string;
   tags?: string[];
+  status?: TaskStatus;
 }

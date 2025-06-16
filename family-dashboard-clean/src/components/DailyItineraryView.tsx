@@ -54,6 +54,8 @@ const DailyItineraryView: React.FC<DailyItineraryViewProps> = ({
   const [selectedTime, setSelectedTime] = useState<string>('09:00');
   const [sopDetails, setSOPDetails] = useState<Map<string, SOP>>(new Map());
   const [editingSOPId, setEditingSOPId] = useState<string | null>(null);
+  const [showInboxItems, setShowInboxItems] = useState<boolean>(true);
+  const [showDefermentDropdown, setShowDefermentDropdown] = useState<string | null>(null);
 
   useEffect(() => {
     loadDailyData();
@@ -72,6 +74,20 @@ const DailyItineraryView: React.FC<DailyItineraryViewProps> = ({
       loadDailyData();
     }
   }, [refreshTrigger]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showDefermentDropdown) {
+        setShowDefermentDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDefermentDropdown]);
 
   const loadDailyData = async () => {
     try {
@@ -417,6 +433,75 @@ const DailyItineraryView: React.FC<DailyItineraryViewProps> = ({
     setTimelineItems(prev => prev.filter(i => i.id !== item.id));
   };
 
+  const handleDeferInboxItem = async (item: TimelineItem, deferOption: string) => {
+    if (!item.originalData || item.type !== 'inbox') return;
+    
+    const task = item.originalData as SchedulableItem;
+    let deferredDate = new Date();
+    
+    switch (deferOption) {
+      case 'evening':
+        // Set to 6 PM today
+        deferredDate.setHours(18, 0, 0, 0);
+        break;
+      case 'tomorrow':
+        // Set to 9 AM tomorrow
+        deferredDate.setDate(deferredDate.getDate() + 1);
+        deferredDate.setHours(9, 0, 0, 0);
+        break;
+      case 'end-of-week':
+        // Set to Friday 9 AM of current week
+        const daysToFriday = 5 - deferredDate.getDay();
+        deferredDate.setDate(deferredDate.getDate() + daysToFriday);
+        deferredDate.setHours(9, 0, 0, 0);
+        break;
+      case 'next-week':
+        // Set to Monday 9 AM of next week
+        const daysToNextMonday = 7 - deferredDate.getDay() + 1;
+        deferredDate.setDate(deferredDate.getDate() + daysToNextMonday);
+        deferredDate.setHours(9, 0, 0, 0);
+        break;
+      case 'archive':
+        // Mark as archived (add archive tag)
+        try {
+          const updatedTask = {
+            ...task,
+            tags: [...(task.tags || []), 'archived'].filter((tag, index, arr) => arr.indexOf(tag) === index)
+          };
+          await goalService.updateTask(task.id, updatedTask);
+          
+          // Remove from timeline immediately
+          setTimelineItems(prev => prev.filter(i => i.id !== item.id));
+          setShowDefermentDropdown(null);
+          return;
+        } catch (error) {
+          console.error('Error archiving task:', error);
+          alert('Failed to archive task. Please try again.');
+          return;
+        }
+    }
+    
+    try {
+      // Update the task with new due date
+      const updatedTask = {
+        ...task,
+        dueDate: deferredDate.toISOString()
+      };
+      await goalService.updateTask(task.id, updatedTask);
+      
+      // Remove from timeline immediately
+      setTimelineItems(prev => prev.filter(i => i.id !== item.id));
+      setShowDefermentDropdown(null);
+      
+      // Refresh data and notify other views
+      await loadDailyData();
+      onDataChange?.();
+    } catch (error) {
+      console.error('Error deferring task:', error);
+      alert('Failed to defer task. Please try again.');
+    }
+  };
+
   const handleRemoveScheduledItem = async (item: TimelineItem) => {
     if (!item.isScheduled || !item.originalData) return;
     
@@ -584,17 +669,38 @@ const DailyItineraryView: React.FC<DailyItineraryViewProps> = ({
     <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">
-          Today's Itinerary
-        </h2>
-        <p className="text-gray-600">
-          {new Date().toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Today's Itinerary
+            </h2>
+            <p className="text-gray-600">
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </p>
+          </div>
+          
+          {/* Inbox Toggle */}
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-700">Show Inbox Items</label>
+            <button
+              onClick={() => setShowInboxItems(!showInboxItems)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                showInboxItems ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  showInboxItems ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Timeline */}
@@ -612,7 +718,9 @@ const DailyItineraryView: React.FC<DailyItineraryViewProps> = ({
 
         {/* Timeline items */}
         <div className="space-y-3">
-          {timelineItems.map((item) => (
+          {timelineItems
+            .filter(item => showInboxItems || item.type !== 'inbox')
+            .map((item) => (
             <div
               key={item.id}
               className={`border-l-4 rounded-lg p-4 transition-all duration-200 hover:shadow-md ${getStatusColor(item.status)}`}
@@ -858,6 +966,54 @@ const DailyItineraryView: React.FC<DailyItineraryViewProps> = ({
                           >
                             ⏱️
                           </button>
+                          
+                          {/* Deferment Dropdown */}
+                          <div className="relative">
+                            <button 
+                              onClick={() => setShowDefermentDropdown(showDefermentDropdown === item.id ? null : item.id)}
+                              className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md hover:bg-purple-200 transition-colors"
+                              title="Defer this item"
+                            >
+                              📅 Defer
+                            </button>
+                            
+                            {showDefermentDropdown === item.id && (
+                              <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-36">
+                                <button
+                                  onClick={() => handleDeferInboxItem(item, 'evening')}
+                                  className="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50 text-gray-700"
+                                >
+                                  This Evening
+                                </button>
+                                <button
+                                  onClick={() => handleDeferInboxItem(item, 'tomorrow')}
+                                  className="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50 text-gray-700"
+                                >
+                                  Tomorrow
+                                </button>
+                                <button
+                                  onClick={() => handleDeferInboxItem(item, 'end-of-week')}
+                                  className="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50 text-gray-700"
+                                >
+                                  End of Week
+                                </button>
+                                <button
+                                  onClick={() => handleDeferInboxItem(item, 'next-week')}
+                                  className="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50 text-gray-700"
+                                >
+                                  Next Week
+                                </button>
+                                <div className="border-t border-gray-100"></div>
+                                <button
+                                  onClick={() => handleDeferInboxItem(item, 'archive')}
+                                  className="block w-full text-left px-3 py-2 text-xs hover:bg-red-50 text-red-700"
+                                >
+                                  Archive
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          
                           <button 
                             onClick={() => handleDismissInboxItem(item)}
                             className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-md hover:bg-orange-200 transition-colors"

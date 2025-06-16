@@ -539,6 +539,64 @@ class GoalService {
 
     await Promise.all(deletePromises);
   }
+
+  // Get tasks with specific tag
+  async getTasksWithTag(contextId: string, tag: string): Promise<SchedulableItem[]> {
+    try {
+      const tasks = await this.getTasksByContext(contextId);
+      return tasks
+        .filter(task => task.tags?.includes(tag))
+        .map(task => ({
+          id: task.id,
+          type: 'task' as const,
+          title: task.title,
+          description: task.description,
+          estimatedDuration: task.estimatedDuration,
+          priority: task.priority,
+          assignedTo: task.assignedTo,
+          dueDate: task.dueDate,
+          goalId: task.goalId,
+          projectId: task.projectId,
+          milestoneId: task.milestoneId,
+          canSchedule: true,
+          isRecurring: task.isRecurring,
+          contextId: task.contextId,
+          tags: task.tags || [],
+          status: task.status
+        }));
+    } catch (error) {
+      console.error('Error getting tasks with tag:', error);
+      throw error;
+    }
+  }
+
+  // Get schedulable tasks (for dashboard)
+  async getSchedulableTasks(contextId: string): Promise<SchedulableItem[]> {
+    try {
+      const tasks = await this.getTasksByContext(contextId);
+      return tasks.map(task => ({
+        id: task.id,
+        type: 'task' as const,
+        title: task.title,
+        description: task.description,
+        estimatedDuration: task.estimatedDuration,
+        priority: task.priority,
+        assignedTo: task.assignedTo,
+        dueDate: task.dueDate,
+        goalId: task.goalId,
+        projectId: task.projectId,
+        milestoneId: task.milestoneId,
+        canSchedule: true,
+        isRecurring: task.isRecurring,
+        contextId: task.contextId,
+        tags: task.tags || [],
+        status: task.status
+      }));
+    } catch (error) {
+      console.error('Error getting schedulable tasks:', error);
+      throw error;
+    }
+  }
 }
 
 export const goalService = new GoalService();

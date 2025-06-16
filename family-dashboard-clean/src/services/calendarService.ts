@@ -440,6 +440,29 @@ export const calendarService = {
     };
   },
 
+  // Get events for a specific day
+  async getEventsForDay(contextId: string, date: string): Promise<CalendarEvent[]> {
+    try {
+      const q = query(
+        collection(db, 'calendar_events'),
+        where('contextId', '==', contextId),
+        where('date', '==', date),
+        orderBy('startTime')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: timestampToDate(doc.data().createdAt),
+        updatedAt: timestampToDate(doc.data().updatedAt)
+      })) as CalendarEvent[];
+    } catch (error) {
+      console.error('Error getting events for day:', error);
+      throw error;
+    }
+  },
+
   // Utilities
   timeToMinutes,
   minutesToTime,

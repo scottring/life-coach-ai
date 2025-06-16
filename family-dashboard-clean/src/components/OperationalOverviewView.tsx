@@ -12,17 +12,23 @@ import {
 import TodoWidget from './TodoWidget';
 import MealPlannerWidget from './MealPlannerWidget';
 import DogBehaviorWidget from './DogBehaviorWidget';
+import CalendaringWidget from './CalendaringWidget';
+import InboxWidget from './InboxWidget';
 import { goalService } from '../services/goalService';
 import { calendarService } from '../services/calendarService';
 
 interface OperationalOverviewViewProps {
   contextId: string;
   userId: string;
+  refreshTrigger?: number;
+  onDataChange?: () => void;
 }
 
 const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
   contextId,
-  userId
+  userId,
+  refreshTrigger,
+  onDataChange
 }) => {
   const [stats, setStats] = useState({
     todayProgress: 0,
@@ -36,7 +42,6 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
     needAttentionGoals: 0
   });
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  const [upcomingItems, setUpcomingItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -49,76 +54,44 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
     try {
       setLoading(true);
       
-      // Load tasks data
-      const tasks = await goalService.getTasksByContext(contextId);
-      const today = new Date().toISOString().split('T')[0];
+      // Load tasks and calculate progress
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      
+      const [tasks, events] = await Promise.all([
+        goalService.getSchedulableTasks(contextId),
+        calendarService.getEventsForDay(contextId, todayStr)
+      ]);
       
       const todayTasks = tasks.filter(task => {
-        return task.scheduledDate === today || 
-               (task.dueDate === today && !task.scheduledDate);
+        const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : null;
+        return dueDate === todayStr;
       });
       
       const completedToday = todayTasks.filter(task => task.status === 'completed').length;
-      const overdueTasks = tasks.filter(task => 
-        task.dueDate && task.dueDate < today && task.status !== 'completed'
-      ).length;
+      const overdueTasks = tasks.filter(task => {
+        const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+        return dueDate && dueDate < today && task.status !== 'completed';
+      }).length;
       
-      // Load calendar events for today
-      const todayEvents = await calendarService.getEventsForDateRange(contextId, today, today);
-      
-      // Load goals data
-      const goals = await goalService.getGoalsByContext(contextId);
-      const activeGoals = goals.filter(goal => goal.status === 'in_progress' || goal.status === 'not_started');
-      const onTrackGoals = activeGoals.filter(goal => {
-        // Simple heuristic: goals with recent progress
-        return goal.progress && goal.progress > 0;
-      });
-      
-      // Calculate progress percentages
-      const todayProgress = todayTasks.length > 0 ? Math.round((completedToday / todayTasks.length) * 100) : 0;
-      
-      // Generate recent activity from tasks and events
-      const recentTaskActivity = tasks
-        .filter(task => task.updatedAt && new Date(task.updatedAt).toDateString() === new Date().toDateString())
-        .slice(0, 2)
-        .map(task => ({
-          id: `task-${task.id}`,
-          action: task.status === 'completed' ? 'Completed' : 'Updated',
-          item: task.title,
-          time: new Date(task.updatedAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: 'task'
-        }));
-        
-      // Generate upcoming items from today's schedule
-      const upcomingToday = [
-        ...todayEvents.slice(0, 3).map(event => ({
-          id: `event-${event.id}`,
-          title: event.title,
-          time: new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: 'event'
-        })),
-        ...todayTasks.filter(task => task.status !== 'completed').slice(0, 2).map(task => ({
-          id: `task-${task.id}`,
-          title: task.title,
-          time: task.scheduledDate ? 'Scheduled' : 'Pending',
-          type: 'task'
-        }))
-      ];
-
       setStats({
-        todayProgress,
-        weekProgress: 42, // Would calculate based on weekly goals
+        todayProgress: todayTasks.length > 0 ? Math.round((completedToday / todayTasks.length) * 100) : 0,
+        weekProgress: 75, // Placeholder
         overdueTasks,
-        upcomingEvents: todayEvents.length,
+        upcomingEvents: events.length,
         completedToday,
         totalToday: todayTasks.length,
-        activeGoals: activeGoals.length,
-        onTrackGoals: onTrackGoals.length,
-        needAttentionGoals: activeGoals.length - onTrackGoals.length
+        activeGoals: 5, // Placeholder
+        onTrackGoals: 4, // Placeholder
+        needAttentionGoals: 1 // Placeholder
       });
       
-      setRecentActivity(recentTaskActivity);
-      setUpcomingItems(upcomingToday);
+      // Mock recent activity
+      setRecentActivity([
+        { id: '1', action: 'Completed', item: 'Morning routine', time: '2 hours ago', type: 'sop' },
+        { id: '2', action: 'Scheduled', item: 'Team meeting', time: '3 hours ago', type: 'event' },
+        { id: '3', action: 'Added', item: 'Buy groceries', time: '4 hours ago', type: 'task' },
+      ]);
       
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -136,8 +109,8 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
       color: "blue"
     },
     {
-      title: "Week Progress",
-      value: `${stats.weekProgress}%`,
+      title: "Week Progress", 
+      value: "75%",
       percentage: stats.weekProgress,
       icon: CalendarDaysIcon,
       color: "green"
@@ -171,7 +144,7 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
     return (
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Operational Overview</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
           <p className="text-gray-600">Loading your dashboard...</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -196,7 +169,7 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900">
-          🎯 Operational Overview
+          🎯 Dashboard
         </h2>
         <p className="text-gray-600">
           Monitor your daily and weekly progress across all areas
@@ -251,209 +224,67 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
         })}
       </div>
 
-      {/* Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recent Activity */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-          <div className="space-y-3">
-            {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-center space-x-3 py-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  activity.type === 'sop' ? 'bg-blue-500' :
-                  activity.type === 'event' ? 'bg-green-500' :
-                  activity.type === 'task' ? 'bg-yellow-500' :
-                  'bg-gray-500'
-                }`}></div>
-                <div className="flex-1">
-                  <p className="text-sm">
-                    <span className="font-medium">{activity.action}</span>{' '}
-                    <span className="text-gray-600">{activity.item}</span>
-                  </p>
-                  <p className="text-xs text-gray-500">{activity.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Main Dashboard Grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {/* Left Column - Main Content */}
+        <div className="xl:col-span-2 space-y-8">
+          {/* Calendaring Widget */}
+          <CalendaringWidget
+            contextId={contextId}
+            userId={userId}
+            refreshTrigger={refreshTrigger}
+            onDataChange={onDataChange}
+          />
+          
+          {/* Todo/Goals Widget */}
+          <TodoWidget familyId={contextId} userId={userId} />
+          
+          {/* Meal Planning Widget */}
+          <MealPlannerWidget familyId={contextId} userId={userId} />
         </div>
 
-        {/* Upcoming Items */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Coming Up</h3>
-          <div className="space-y-3">
-            {upcomingItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between py-2">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                    item.type === 'sop' ? 'bg-blue-100' :
-                    item.type === 'event' ? 'bg-green-100' :
-                    item.type === 'task' ? 'bg-yellow-100' :
-                    'bg-gray-100'
-                  }`}>
-                    {item.type === 'event' ? <CalendarDaysIcon className="w-4 h-4" /> :
-                     item.type === 'task' ? <CheckCircleIcon className="w-4 h-4" /> :
-                     <ClockIcon className="w-4 h-4" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                    <p className="text-xs text-gray-500">{item.time}</p>
-                  </div>
-                </div>
-                <button className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200">
-                  View
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Smart Widget Grid */}
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Tasks Summary */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center mb-3">
-            <ListBulletIcon className="w-4 h-4 text-blue-600 mr-2" />
-            <h4 className="text-sm font-medium text-gray-900">Tasks</h4>
-          </div>
-          {loading ? (
-            <div className="animate-pulse space-y-2">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+        {/* Right Column - Side Widgets */}
+        <div className="space-y-8">
+          {/* Inbox Widget */}
+          <InboxWidget
+            contextId={contextId}
+            userId={userId}
+            onItemScheduled={onDataChange}
+          />
+          
+          {/* Dog Behavior Widget */}
+          <DogBehaviorWidget familyId={contextId} userId={userId} />
+          
+          {/* Recent Activity */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="border-b border-gray-200 px-6 py-4">
+              <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
             </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Total Today</span>
-                <span className="font-medium">{stats.totalToday}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Completed</span>
-                <span className="font-medium text-green-600">{stats.completedToday}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Overdue</span>
-                <span className={`font-medium ${stats.overdueTasks > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                  {stats.overdueTasks}
-                </span>
+            <div className="p-6">
+              <div className="space-y-3">
+                {recentActivity.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>
+                ) : (
+                  recentActivity.map((activity) => (
+                    <div key={activity.id} className="flex items-center space-x-3 py-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        activity.type === 'sop' ? 'bg-blue-500' :
+                        activity.type === 'event' ? 'bg-green-500' :
+                        activity.type === 'task' ? 'bg-yellow-500' :
+                        'bg-gray-500'
+                      }`}></div>
+                      <div className="flex-1">
+                        <p className="text-sm">
+                          <span className="font-medium">{activity.action}</span>{' '}
+                          <span className="text-gray-600">{activity.item}</span>
+                        </p>
+                        <p className="text-xs text-gray-500">{activity.time}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Calendar Summary */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center mb-3">
-            <CalendarDaysIcon className="w-4 h-4 text-green-600 mr-2" />
-            <h4 className="text-sm font-medium text-gray-900">Calendar</h4>
-          </div>
-          {loading ? (
-            <div className="animate-pulse space-y-2">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Today's Events</span>
-                <span className="font-medium">{stats.upcomingEvents}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Progress</span>
-                <span className="font-medium text-blue-600">{stats.todayProgress}%</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Status</span>
-                <span className={`font-medium text-sm ${stats.overdueTasks > 0 ? 'text-yellow-600' : 'text-green-600'}`}>
-                  {stats.overdueTasks > 0 ? 'Behind' : 'On Track'}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Goals Progress */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center mb-3">
-            <CubeIcon className="w-4 h-4 text-purple-600 mr-2" />
-            <h4 className="text-sm font-medium text-gray-900">Goals</h4>
-          </div>
-          {loading ? (
-            <div className="animate-pulse space-y-2">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Active Goals</span>
-                <span className="font-medium">{stats.activeGoals}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">On Track</span>
-                <span className="font-medium text-green-600">{stats.onTrackGoals}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Need Attention</span>
-                <span className="font-medium text-yellow-600">{stats.needAttentionGoals}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Existing Widgets Integration */}
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {/* Todo Widget */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
-            <h4 className="text-sm font-semibold text-gray-900 flex items-center">
-              <ListBulletIcon className="w-4 h-4 mr-2 text-blue-600" />
-              Quick Tasks
-            </h4>
-          </div>
-          <div className="h-64 overflow-y-auto">
-            <TodoWidget familyId={contextId} userId={userId} />
-          </div>
-        </div>
-
-        {/* Meal Planner Widget */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-yellow-50">
-            <h4 className="text-sm font-semibold text-gray-900 flex items-center">
-              <HeartIcon className="w-4 h-4 mr-2 text-green-600" />
-              Meal Planning
-            </h4>
-          </div>
-          <div className="h-64 overflow-y-auto">
-            <MealPlannerWidget familyId={contextId} userId={userId} />
-          </div>
-        </div>
-
-        {/* Dog Behavior Widget */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
-            <h4 className="text-sm font-semibold text-gray-900 flex items-center">
-              <HeartIcon className="w-4 h-4 mr-2 text-amber-600" />
-              Pet Monitoring
-            </h4>
-          </div>
-          <div className="h-64 overflow-y-auto">
-            <DogBehaviorWidget familyId={contextId} userId={userId} />
-          </div>
-        </div>
-      </div>
-
-      {/* Session Analytics - only show when there's data */}
-      <div className="mt-8">
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h4 className="text-lg font-medium text-gray-900 mb-4">Session Analytics</h4>
-          <div className="text-center text-gray-500 py-8">
-            <ChartBarIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>Session analytics will appear here when data becomes available</p>
           </div>
         </div>
       </div>

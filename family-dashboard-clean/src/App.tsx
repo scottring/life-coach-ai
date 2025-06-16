@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
-import EnhancedFamilyDashboard from './components/EnhancedFamilyDashboard';
 import ContextSwitcher from './components/ContextSwitcher';
+import ViewModeSwitcher, { ViewMode } from './components/ViewModeSwitcher';
+import DailyItineraryView from './components/DailyItineraryView';
+import WeeklyPlanningView from './components/WeeklyPlanningView';
+import OperationalOverviewView from './components/OperationalOverviewView';
 import { Context } from './types/context';
 import { contextService } from './services/contextService';
 
@@ -14,6 +17,7 @@ function App() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [activeContext, setActiveContext] = useState<Context | null>(null);
+  const [currentViewMode, setCurrentViewMode] = useState<ViewMode>('daily');
 
   // Demo mode for testing without authentication
   const demoUser = { id: 'demo-user', email: 'demo@example.com', name: 'Demo User' };
@@ -221,21 +225,25 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Life Coach AI</h1>
-                <p className="text-sm text-gray-600">Welcome back, {currentUser.name}!</p>
-              </div>
+            <div className="flex flex-col">
+              <h1 className="text-2xl font-bold text-gray-900">Symphony AI</h1>
+              <p className="text-sm text-gray-600">Welcome back, {currentUser.name}!</p>
+            </div>
+            <div className="flex items-center space-x-4">
               {(user || demoMode) && (
                 <ContextSwitcher 
                   userId={currentUser.id} 
                   onContextChange={handleContextChange}
                 />
               )}
-            </div>
-            <div className="flex items-center space-x-4">
+              {(activeContext || demoMode) && (
+                <ViewModeSwitcher 
+                  currentMode={currentViewMode}
+                  onModeChange={setCurrentViewMode}
+                />
+              )}
               {demoMode && (
                 <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">
                   Demo Mode
@@ -255,11 +263,29 @@ function App() {
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {activeContext || demoMode ? (
-          <EnhancedFamilyDashboard 
-            contextId={demoMode ? demoFamilyId : activeContext?.id || ''} 
-            userId={currentUser.id}
-            contextType={demoMode ? 'family' : activeContext?.type || 'family'}
-          />
+          <>
+            {/* Dynamic Content Based on View Mode */}
+            {currentViewMode === 'daily' && (
+              <DailyItineraryView
+                contextId={demoMode ? demoFamilyId : activeContext?.id || ''}
+                userId={currentUser.id}
+              />
+            )}
+
+            {currentViewMode === 'weekly' && (
+              <WeeklyPlanningView
+                contextId={demoMode ? demoFamilyId : activeContext?.id || ''}
+                userId={currentUser.id}
+              />
+            )}
+
+            {currentViewMode === 'overview' && (
+              <OperationalOverviewView
+                contextId={demoMode ? demoFamilyId : activeContext?.id || ''}
+                userId={currentUser.id}
+              />
+            )}
+          </>
         ) : (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">

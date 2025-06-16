@@ -16,6 +16,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { SchedulableItem, GoalPriority } from '../types/goals';
 import { goalService } from '../services/goalService';
+import { calendarService } from '../services/calendarService';
 
 interface IntelligentSidebarProps {
   contextId: string;
@@ -212,9 +213,16 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
       }
 
 
-      // 2. Load available SOPs (example data for now)
+      // 2. Load available SOPs (filtered by scheduled status)
       try {
-        const sopItems: SchedulableItem[] = [
+        // Get scheduled SOP IDs for the current week
+        const scheduledSOPIds = await calendarService.getScheduledSOPIds(contextId, {
+          start: weekStart,
+          end: weekEnd
+        });
+
+        // Define available SOPs and filter out already scheduled ones
+        const allSOPs: SchedulableItem[] = [
           {
             id: 'sop-1',
             type: 'sop' as const,
@@ -242,7 +250,13 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
             contextId: contextId
           }
         ];
-        schedulableItems.push(...sopItems);
+
+        // Filter out already scheduled SOPs
+        const availableSOPs = allSOPs.filter(sop => 
+          !scheduledSOPIds.includes(sop.id)
+        );
+
+        schedulableItems.push(...availableSOPs);
       } catch (error) {
         console.warn('Failed to load SOPs:', error);
       }
@@ -517,9 +531,9 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
 
   if (loading) {
     return (
-      <div className={`fixed left-0 top-16 h-full bg-white shadow-lg border-r border-gray-200 z-40 transition-transform duration-300 ${
+      <div className={`fixed left-0 top-[100px] h-[calc(100vh-100px)] w-96 bg-white shadow-lg border-r border-gray-200 z-10 transition-transform duration-300 ${
         isVisible ? 'translate-x-0' : '-translate-x-full'
-      }`} style={{ width: '320px' }}>
+      }`}>
         <div className="flex items-center justify-center h-full">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -533,40 +547,31 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
       <button
         onClick={onToggle}
         className={`fixed left-0 top-1/2 transform -translate-y-1/2 bg-blue-600 text-white p-2 rounded-r-md shadow-lg z-50 transition-all duration-300 ${
-          isVisible ? 'translate-x-80' : 'translate-x-0'
+          isVisible ? 'translate-x-96' : 'translate-x-0'
         }`}
-        style={{ marginLeft: isVisible ? '320px' : '0px' }}
       >
         {isVisible ? (
-          <ChevronLeftIcon className="w-5 h-5" />
+          <ChevronLeftIcon className="w-4 h-4" />
         ) : (
-          <ChevronRightIcon className="w-5 h-5" />
+          <ChevronRightIcon className="w-4 h-4" />
         )}
       </button>
 
       {/* Sidebar */}
-      <div className={`fixed left-0 top-16 h-full bg-white shadow-lg border-r border-gray-200 z-40 transition-transform duration-300 ${
+      <div className={`fixed left-0 top-[100px] h-[calc(100vh-100px)] w-96 bg-white shadow-lg border-r border-gray-200 z-10 transition-transform duration-300 ${
         isVisible ? 'translate-x-0' : '-translate-x-full'
-      }`} style={{ width: '320px' }}>
+      }`}>
         
         {/* Header */}
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">Unscheduled Items</h3>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <FunnelIcon className="w-4 h-4" />
-              </button>
-              <button
-                onClick={loadSidebarData}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <ArrowPathIcon className="w-4 h-4" />
-              </button>
-            </div>
+            <h3 className="text-lg font-bold text-gray-900">✨ Smart Suggestions</h3>
+            <button
+              onClick={loadSidebarData}
+              className="p-2 text-blue-500 hover:text-blue-700 bg-white rounded-full shadow-sm"
+            >
+              <ArrowPathIcon className="w-4 h-4" />
+            </button>
           </div>
           
           {/* Search */}
@@ -574,100 +579,115 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
             <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search items..."
+              placeholder="Search for anything..."
               value={filters.search}
               onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
             />
-          </div>
-
-          {/* Quick Filters */}
-          {showFilters && (
-            <div className="mt-3 space-y-2">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => toggleFilter('dueToday', !filters.dueToday)}
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    filters.dueToday ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  Due Today
-                </button>
-                <button
-                  onClick={() => toggleFilter('overdue', !filters.overdue)}
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    filters.overdue ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  Overdue
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Create Actions */}
-          <div className="mt-3 flex space-x-2">
-            <button
-              onClick={() => setShowCreateTaskModal(true)}
-              className="flex-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md hover:bg-blue-200 transition-colors"
-            >
-              <PlusIcon className="w-3 h-3 inline mr-1" />
-              Task
-            </button>
-            <button
-              onClick={onCreateGoal}
-              className="flex-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-md hover:bg-green-200 transition-colors"
-            >
-              <PlusIcon className="w-3 h-3 inline mr-1" />
-              Goal
-            </button>
-            <button
-              onClick={onCreateProject}
-              className="flex-1 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md hover:bg-purple-200 transition-colors"
-            >
-              <PlusIcon className="w-3 h-3 inline mr-1" />
-              Project
-            </button>
           </div>
         </div>
 
-        {/* Quick Inbox Entry */}
-        <div className="border-b border-gray-200 p-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-3">📥 Inbox</h4>
-          <div className="space-y-2">
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                placeholder="Quick add: task, idea, reminder..."
-                className="flex-1 text-sm px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleQuickAdd(e.currentTarget.value);
-                    e.currentTarget.value = '';
-                  }
-                }}
-              />
-              <button
-                onClick={() => setShowCreateTaskModal(true)}
-                className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
-                title="Detailed task creation"
-              >
-                <PlusIcon className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-xs text-gray-500">
-              Press Enter for quick add or click + for detailed options
-            </p>
+        {/* Quick Actions */}
+        <div className="border-b border-gray-200 p-4 bg-gray-50">
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <button className="flex flex-col items-center p-3 bg-gradient-to-br from-green-400 to-green-600 text-white rounded-lg shadow-sm hover:shadow-md transition-all">
+              <PlusIcon className="w-6 h-6 mb-1" />
+              <span className="text-xs font-medium">Quick Task</span>
+            </button>
+            <button className="flex flex-col items-center p-3 bg-gradient-to-br from-purple-400 to-purple-600 text-white rounded-lg shadow-sm hover:shadow-md transition-all">
+              <ClipboardDocumentListIcon className="w-6 h-6 mb-1" />
+              <span className="text-xs font-medium">New SOP</span>
+            </button>
+          </div>
+          
+          {/* Quick Add Input */}
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              placeholder="💭 What's on your mind?"
+              className="flex-1 text-sm px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleQuickAdd(e.currentTarget.value);
+                  e.currentTarget.value = '';
+                }
+              }}
+            />
+            <button
+              onClick={() => setShowCreateTaskModal(true)}
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 shadow-sm"
+              title="Add to inbox"
+            >
+              ➕
+            </button>
           </div>
         </div>
 
         {/* Items List */}
         <div className="flex-1 overflow-y-auto">
+          {/* AI Curated SOPs */}
+          <div className="p-4">
+            <div className="flex items-center mb-3">
+              <span className="text-lg">🎯</span>
+              <h5 className="text-sm font-semibold text-gray-700 ml-2">Smart SOPs for Today</h5>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div 
+                draggable
+                onDragStart={(e) => handleDragStart(e, {
+                  id: 'sop-morning',
+                  type: 'sop' as const,
+                  title: 'Morning Routine',
+                  description: 'Perfect start to your day',
+                  estimatedDuration: 30,
+                  priority: 'medium' as GoalPriority,
+                  canSchedule: true,
+                  isRecurring: false,
+                  contextId: contextId
+                })}
+                className="bg-gradient-to-br from-yellow-100 to-orange-100 border-2 border-yellow-200 rounded-xl p-3 cursor-move hover:shadow-lg transition-all group"
+              >
+                <div className="text-2xl mb-2">☀️</div>
+                <div className="text-xs font-semibold text-gray-700">Morning Routine</div>
+                <div className="text-xs text-gray-500">30 min • Perfect start</div>
+                <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all">
+                  ✕
+                </button>
+              </div>
+              
+              <div 
+                draggable
+                onDragStart={(e) => handleDragStart(e, {
+                  id: 'sop-weekly',
+                  type: 'sop' as const,
+                  title: 'Weekly Review',
+                  description: 'Plan your week ahead',
+                  estimatedDuration: 45,
+                  priority: 'high' as GoalPriority,
+                  canSchedule: true,
+                  isRecurring: false,
+                  contextId: contextId
+                })}
+                className="bg-gradient-to-br from-blue-100 to-purple-100 border-2 border-blue-200 rounded-xl p-3 cursor-move hover:shadow-lg transition-all group relative"
+              >
+                <div className="text-2xl mb-2">📋</div>
+                <div className="text-xs font-semibold text-gray-700">Weekly Review</div>
+                <div className="text-xs text-gray-500">45 min • Planning</div>
+                <button className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all">
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Inbox Tasks */}
-          <div className="p-4 border-b border-gray-100">
-            <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-              Inbox Tasks ({filteredItems.filter(item => item.tags?.includes('inbox')).length})
-            </h5>
+          <div className="p-4 border-t border-gray-100">
+            <div className="flex items-center mb-3">
+              <span className="text-lg">📥</span>
+              <h5 className="text-sm font-semibold text-gray-700 ml-2">
+                Inbox ({filteredItems.filter(item => item.tags?.includes('inbox')).length})
+              </h5>
+            </div>
             <div className="space-y-2">
               {filteredItems
                 .filter(item => item.tags?.includes('inbox'))
@@ -675,22 +695,27 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
                   <InboxTaskItem key={item.id} item={item} />
                 ))}
               {filteredItems.filter(item => item.tags?.includes('inbox')).length === 0 && (
-                <p className="text-xs text-gray-400 italic">No inbox tasks</p>
+                <div className="text-center py-4">
+                  <div className="text-4xl mb-2">🎉</div>
+                  <p className="text-xs text-gray-500">Inbox is empty!</p>
+                </div>
               )}
             </div>
           </div>
 
           {/* Suggested Items */}
-          <div className="p-4">
-            <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-              Suggestions ({filteredItems.filter(item => !item.tags?.includes('inbox')).length})
-            </h5>
+          <div className="p-4 border-t border-gray-100">
+            <div className="flex items-center mb-3">
+              <span className="text-lg">💡</span>
+              <h5 className="text-sm font-semibold text-gray-700 ml-2">
+                AI Suggestions ({filteredItems.filter(item => !item.tags?.includes('inbox')).length})
+              </h5>
+            </div>
             <div className="space-y-3">
           {filteredItems.filter(item => !item.tags?.includes('inbox')).length === 0 ? (
-            <div className="text-center text-gray-500 py-8">
-              <CheckCircleIcon className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-              <p className="text-sm">No suggested items</p>
-              <p className="text-xs text-gray-400">All caught up!</p>
+            <div className="text-center py-6">
+              <div className="text-4xl mb-2">🤖</div>
+              <p className="text-xs text-gray-500">AI is thinking...</p>
             </div>
           ) : (
             filteredItems
@@ -700,57 +725,42 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
                 key={item.id}
                 draggable
                 onDragStart={(e) => handleDragStart(e, item)}
-                className={`bg-white border border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md transition-shadow border-l-4 ${getPriorityBorderColor(item.priority)}`}
+                className={`bg-gradient-to-r from-white to-gray-50 border-2 border-gray-200 rounded-lg p-3 cursor-move hover:shadow-md transition-all group ${getPriorityBorderColor(item.priority)} hover:scale-105`}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center space-x-2">
-                    {getTypeIcon(item.type)}
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full uppercase ${getTypeColor(item.type)}`}>
-                      {item.type}
-                    </span>
+                    <div className="p-1 rounded-full bg-gray-100">
+                      {getTypeIcon(item.type)}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-gray-800 uppercase tracking-wide">
+                        {item.type}
+                      </span>
+                      <span className="text-xs text-gray-500 flex items-center">
+                        <ClockIcon className="w-3 h-3 mr-1" />
+                        {item.estimatedDuration}m
+                      </span>
+                    </div>
                   </div>
-                  {getPriorityIcon(item.priority)}
+                  <button className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all">
+                    ✕
+                  </button>
                 </div>
 
-                <h4 className="font-medium text-gray-900 mb-1 text-sm">{item.title}</h4>
+                <h4 className="font-semibold text-gray-900 text-sm mb-1 leading-tight">{item.title}</h4>
                 
                 {item.description && (
-                  <p className="text-xs text-gray-600 mb-2 line-clamp-2">{item.description}</p>
+                  <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{item.description}</p>
                 )}
 
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center space-x-1">
-                      <ClockIcon className="w-3 h-3" />
-                      <span>{item.estimatedDuration}m</span>
-                    </div>
-                    {item.assignedTo && (
-                      <div className="flex items-center space-x-1">
-                        <UserIcon className="w-3 h-3" />
-                        <span>{getMemberName(item.assignedTo)}</span>
-                      </div>
-                    )}
+                <div className="mt-2 flex items-center justify-between">
+                  <div className="flex space-x-1">
+                    {item.priority === 'high' && <span className="text-xs">🔥</span>}
+                    {item.priority === 'medium' && <span className="text-xs">⚡</span>}
+                    {item.priority === 'low' && <span className="text-xs">💤</span>}
                   </div>
-                  
-                  {item.dueDate && (
-                    <span className={`text-xs font-medium ${
-                      isOverdue(item.dueDate) ? 'text-red-600' :
-                      isDueToday(item.dueDate) ? 'text-orange-600' :
-                      'text-gray-500'
-                    }`}>
-                      {formatDueDate(item.dueDate)}
-                    </span>
-                  )}
+                  <span className="text-xs text-gray-400">Drag to schedule →</span>
                 </div>
-
-                {item.isRecurring && (
-                  <div className="mt-2">
-                    <span className="inline-flex items-center space-x-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                      <ArrowPathIcon className="w-3 h-3" />
-                      <span>Recurring</span>
-                    </span>
-                  </div>
-                )}
 
               </div>
             ))
@@ -759,27 +769,6 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
           </div>
         </div>
 
-        {/* Stats Footer */}
-        <div className="border-t border-gray-200 p-4">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-lg font-semibold text-gray-900">{filteredItems.length}</div>
-              <div className="text-xs text-gray-500">Total</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-red-600">
-                {filteredItems.filter(item => isOverdue(item.dueDate)).length}
-              </div>
-              <div className="text-xs text-gray-500">Overdue</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-orange-600">
-                {filteredItems.filter(item => isDueToday(item.dueDate)).length}
-              </div>
-              <div className="text-xs text-gray-500">Due Today</div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Quick Task Creation Modal */}

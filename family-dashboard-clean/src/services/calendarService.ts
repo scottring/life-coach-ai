@@ -365,6 +365,42 @@ export const calendarService = {
     await deleteDoc(doc(db, 'calendar_events', eventId));
   },
 
+  // Get IDs of SOPs that are already scheduled
+  async getScheduledSOPIds(
+    contextId: string, 
+    dateRange?: { start: string; end: string }
+  ): Promise<string[]> {
+    let eventsQuery = query(
+      collection(db, 'calendar_events'),
+      where('contextId', '==', contextId),
+      where('type', '==', 'sop')
+    );
+
+    // Add date range filter if provided
+    if (dateRange) {
+      eventsQuery = query(
+        collection(db, 'calendar_events'),
+        where('contextId', '==', contextId),
+        where('type', '==', 'sop'),
+        where('date', '>=', dateRange.start),
+        where('date', '<=', dateRange.end)
+      );
+    }
+
+    const snapshot = await getDocs(eventsQuery);
+    
+    // Extract SOP IDs from scheduled events
+    const scheduledSOPIds: string[] = [];
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      if (data.sopId) {
+        scheduledSOPIds.push(data.sopId);
+      }
+    });
+
+    return Array.from(new Set(scheduledSOPIds)); // Remove duplicates
+  },
+
   // Generate calendar week view
   generateCalendarWeek(
     weekStart: string,

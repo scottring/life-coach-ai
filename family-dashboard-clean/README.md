@@ -1,4 +1,14 @@
-# Getting Started with Create React App
+# Symphony AI
+
+Symphony AI is an intelligent family dashboard and productivity system built with React and Firebase.
+
+## Features
+
+- **Daily Itinerary View**: Chronological timeline of today's schedule and tasks
+- **Weekly Planning Hub**: Expanded calendar with drag-and-drop scheduling from intelligent sidebar
+- **Operational Overview**: Compact monitoring dashboard with activity widgets
+- **Smart Sidebar**: Drag items (SOPs, tasks, goals) directly onto calendar
+- **Context Management**: Multi-family/organization support
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 

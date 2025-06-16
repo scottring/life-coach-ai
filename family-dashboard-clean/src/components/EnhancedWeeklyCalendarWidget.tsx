@@ -24,6 +24,8 @@ interface EnhancedWeeklyCalendarWidgetProps {
   onCreateTask?: () => void;
   onCreateGoal?: () => void;
   onCreateProject?: () => void;
+  refreshTrigger?: number;
+  onItemScheduled?: () => void;
 }
 
 const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> = ({
@@ -34,7 +36,9 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
   onCreateEvent,
   onCreateTask,
   onCreateGoal,
-  onCreateProject
+  onCreateProject,
+  refreshTrigger,
+  onItemScheduled
 }) => {
   const [currentWeek, setCurrentWeek] = useState<string>('');
   const [calendarWeek, setCalendarWeek] = useState<CalendarWeek | null>(null);
@@ -332,6 +336,7 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
       
       // Trigger sidebar refresh to remove scheduled item
       setSidebarRefreshTrigger(prev => prev + 1);
+      onItemScheduled?.();
     } catch (error) {
       console.error('Error scheduling item:', error);
     }
@@ -579,23 +584,23 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
         isVisible={sidebarVisible}
         onToggle={() => setSidebarVisible(!sidebarVisible)}
         onItemDragStart={handleSidebarItemDragStart}
+        onItemScheduled={onItemScheduled}
         onCreateTask={onCreateTask || (() => {})}
         onCreateGoal={onCreateGoal || (() => {})}
         onCreateProject={onCreateProject || (() => {})}
-        refreshTrigger={sidebarRefreshTrigger}
+        refreshTrigger={refreshTrigger || sidebarRefreshTrigger}
       />
 
       {/* Main Calendar Content */}
       <div 
-        className={`transition-all duration-300 ${sidebarVisible ? 'ml-80' : 'ml-0'}`}
-        style={{ marginLeft: sidebarVisible ? '320px' : '0px' }}
+        className={`transition-all duration-300 ${sidebarVisible ? 'ml-64' : 'ml-0'}`}
       >
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 p-4">
+        <div className="bg-white border-b border-gray-200 p-4 relative z-20">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h2 className="text-xl font-semibold text-gray-900">
-                {viewMode === 1 ? 'Day' : viewMode === 3 ? '3-Day' : viewMode === 5 ? '5-Day' : 'Weekly'} Calendar
+              <h2 className="text-2xl font-bold text-gray-900">
+                Weekly Planning Hub
               </h2>
               <div className="text-sm text-gray-600">{getDateRange()}</div>
             </div>

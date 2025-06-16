@@ -4,7 +4,7 @@ export type SOPCategory = 'morning' | 'evening' | 'leaving' | 'cleanup' | 'meal-
 export type SOPDifficulty = 'easy' | 'medium' | 'hard';
 export type SOPStatus = 'draft' | 'active' | 'archived';
 
-export type SOPStepType = 'standard' | 'embedded_sop';
+export type SOPStepType = 'standard' | 'embedded_sop' | 'list';
 
 export interface SOPStep {
   id: string;
@@ -24,6 +24,14 @@ export interface SOPStep {
     skipSteps?: string[]; // Skip specific steps in the embedded SOP
     estimatedDuration?: number; // Override duration if different in this context
   };
+  
+  // For list-type steps
+  listItems?: {
+    id: string;
+    text: string;
+    isCompleted: boolean;
+    isOptional: boolean;
+  }[];
   
   // For expanded view (runtime properties)
   parentStepId?: string; // ID of the parent step when this is from an embedded SOP

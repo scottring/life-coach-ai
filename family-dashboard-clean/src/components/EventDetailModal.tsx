@@ -131,6 +131,22 @@ const EventDetailModal: React.FC<EventDetailModalProps> = ({
                   <p className="text-sm text-gray-600 mb-2">{step.description}</p>
                 )}
                 
+                {step.type === 'list' && step.listItems && step.listItems.length > 0 && (
+                  <div className="bg-gray-50 rounded-md p-3 mb-2">
+                    <div className="space-y-1">
+                      {step.listItems.map((item, itemIndex) => (
+                        <div key={item.id} className="flex items-center space-x-2">
+                          <span className="text-xs text-gray-500">{itemIndex + 1}.</span>
+                          <span className={`text-sm ${item.isOptional ? 'text-gray-500 italic' : 'text-gray-700'}`}>
+                            {item.text}
+                            {item.isOptional && <span className="ml-1 text-xs">(optional)</span>}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex items-center space-x-4 text-xs text-gray-500">
                   <div className="flex items-center space-x-1">
                     <ClockIcon className="w-3 h-3" />

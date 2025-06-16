@@ -36,7 +36,9 @@ const InboxWidget: React.FC<InboxWidgetProps> = ({
         const isArchived = task.tags?.includes('archived');
         // Exclude scheduled tasks (tasks that have both scheduledDate and scheduledTime)
         const isScheduled = task.scheduledDate && task.scheduledTime;
-        return !isArchived && !isScheduled;
+        // Exclude deferred tasks (tasks with dueDate in the future)
+        const isDeferred = task.dueDate && new Date(task.dueDate) > new Date();
+        return !isArchived && !isScheduled && !isDeferred;
       }));
     } catch (error) {
       console.error('Error loading inbox items:', error);

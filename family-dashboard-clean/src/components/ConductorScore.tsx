@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ClockIcon,
   SparklesIcon,
@@ -60,17 +60,35 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
   const [showUnscheduled, setShowUnscheduled] = useState(true);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadTodaysSymphony();
     
-    // Update current time every minute
+    // Update current time every minute and scroll to current time
     const interval = setInterval(() => {
       setCurrentTime(new Date());
+      scrollToCurrentTime();
     }, 60000);
+
+    // Initial scroll to current time after load
+    setTimeout(() => scrollToCurrentTime(), 1000);
 
     return () => clearInterval(interval);
   }, [contextId, selectedDomain, refreshTrigger]);
+
+  const scrollToCurrentTime = () => {
+    if (timelineRef.current) {
+      const currentTimePosition = getCurrentTimePosition();
+      if (currentTimePosition !== -1) {
+        // Scroll to current time with some padding above
+        timelineRef.current.scrollTo({
+          top: Math.max(0, currentTimePosition - 200),
+          behavior: 'smooth'
+        });
+      }
+    }
+  };
 
   const loadTodaysSymphony = async () => {
     try {
@@ -84,17 +102,19 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
         goalService.getTasksWithTag(contextId, 'inbox')
       ]);
 
-      // Filter tasks for today's unscheduled items (exclude already scheduled ones)
+      // Filter tasks for today's unscheduled items (exclude already scheduled ones and deferred items)
       const todayTasks = allTasks.filter(task => {
         const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : null;
         const isScheduled = task.scheduledDate && task.scheduledTime;
-        return (dueDate === today && task.status !== 'completed' && !isScheduled);
+        const isDeferred = task.dueDate && new Date(task.dueDate) > new Date();
+        return (dueDate === today && task.status !== 'completed' && !isScheduled && !isDeferred);
       });
 
-      // Combine with inbox tasks that aren't completed and aren't scheduled
+      // Combine with inbox tasks that aren't completed, aren't scheduled, and aren't deferred
       const inboxItems = inboxTasks.filter(task => {
         const isScheduled = task.scheduledDate && task.scheduledTime;
-        return task.status !== 'completed' && !isScheduled;
+        const isDeferred = task.dueDate && new Date(task.dueDate) > new Date();
+        return task.status !== 'completed' && !isScheduled && !isDeferred;
       });
       const allUnscheduledTasks = [...todayTasks, ...inboxItems];
       
@@ -355,7 +375,7 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
   const generateTimeSlots = (): string[] => {
     const slots = [];
     for (let hour = 6; hour <= 22; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
+      for (let minute = 0; minute < 60; minute += 15) {
         const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         slots.push(timeString);
       }
@@ -370,11 +390,25 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
     const hours = now.getHours();
     const minutes = now.getMinutes();
     const totalMinutes = hours * 60 + minutes;
-    const dayStart = 6 * 60; // 6 AM
-    const dayEnd = 22 * 60; // 10 PM
-    const dayDuration = dayEnd - dayStart;
-    const position = ((totalMinutes - dayStart) / dayDuration) * 100;
-    return Math.max(0, Math.min(100, position));
+    const dayStart = 6 * 60; // 6 AM start
+    
+    // If before 6 AM or after 10 PM, don't show the line
+    if (totalMinutes < dayStart || totalMinutes > 22 * 60) {
+      return -1;
+    }
+    
+    // Calculate which 15-minute slot we're in
+    const minutesFromStart = totalMinutes - dayStart;
+    const slotHeight = 48; // min-h-12 = 48px
+    const slotSpacing = 8; // space-y-2 = 8px
+    const totalSlotHeight = slotHeight + slotSpacing;
+    
+    // Calculate position within the 15-minute slot
+    const slotIndex = Math.floor(minutesFromStart / 15);
+    const minutesIntoSlot = minutesFromStart % 15;
+    const positionInSlot = (minutesIntoSlot / 15) * slotHeight;
+    
+    return slotIndex * totalSlotHeight + positionInSlot + 120; // 120px offset for header
   };
 
   const getCurrentTimeSlot = (): string => {
@@ -528,17 +562,19 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
               </div>
             </div>
 
-            <div className="p-6 relative min-h-96">
+            <div ref={timelineRef} className="p-6 relative min-h-96 max-h-96 overflow-y-auto">
               {/* Current Time Indicator */}
-              <div 
-                className="absolute left-6 right-6 h-0.5 bg-red-500 z-10"
-                style={{ top: `${getCurrentTimePosition() * 6 + 120}px` }}
-              >
-                <div className="absolute -left-2 -top-2 w-4 h-4 bg-red-500 rounded-full"></div>
-                <div className="absolute left-4 -top-3 bg-red-500 text-white text-xs px-2 py-1 rounded">
-                  {currentTime.toTimeString().slice(0, 5)}
+              {getCurrentTimePosition() !== -1 && (
+                <div 
+                  className="absolute left-6 right-6 h-0.5 bg-red-500 z-10"
+                  style={{ top: `${getCurrentTimePosition()}px` }}
+                >
+                  <div className="absolute -left-2 -top-2 w-4 h-4 bg-red-500 rounded-full"></div>
+                  <div className="absolute left-4 -top-3 bg-red-500 text-white text-xs px-2 py-1 rounded">
+                    {currentTime.toTimeString().slice(0, 5)}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Time-based Schedule Grid */}
               <div className="space-y-2">

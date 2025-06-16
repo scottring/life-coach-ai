@@ -456,6 +456,20 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
                 </div>
                 
                 <div className="space-y-2">
+                  {/* Step Type Selector */}
+                  <div className="flex items-center space-x-2">
+                    <label className="text-sm text-gray-700">Type:</label>
+                    <select
+                      value={step.type}
+                      onChange={(e) => updateStep(index, 'type', e.target.value as SOPStepType)}
+                      className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="standard">Standard Step</option>
+                      <option value="list">Checklist/List</option>
+                      <option value="embedded_sop">Embedded SOP</option>
+                    </select>
+                  </div>
+
                   {step.type === 'embedded_sop' ? (
                     <>
                       <div className="bg-white rounded border p-3">
@@ -465,6 +479,111 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
                           This will execute all steps from the "{step.title}" SOP
                         </div>
                       </div>
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                          <label className="text-sm text-gray-700">Duration:</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={step.estimatedDuration}
+                            onChange={(e) => updateStep(index, 'estimatedDuration', parseInt(e.target.value) || 1)}
+                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                          <span className="text-sm text-gray-500">min</span>
+                        </div>
+                        
+                        <label className="flex items-center text-sm">
+                          <input
+                            type="checkbox"
+                            checked={step.isOptional}
+                            onChange={(e) => updateStep(index, 'isOptional', e.target.checked)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="ml-1 text-gray-700">Optional</span>
+                        </label>
+                      </div>
+                    </>
+                  ) : step.type === 'list' ? (
+                    <>
+                      <input
+                        type="text"
+                        value={step.title}
+                        onChange={(e) => updateStep(index, 'title', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="List title (e.g., 'Summer Camp Packing List')..."
+                        required
+                      />
+                      
+                      <div className="bg-gray-50 rounded-md p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm font-medium text-gray-700">List Items:</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newItem = {
+                                id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+                                text: '',
+                                isCompleted: false,
+                                isOptional: false
+                              };
+                              const updatedItems = [...(step.listItems || []), newItem];
+                              updateStep(index, 'listItems', updatedItems);
+                            }}
+                            className="flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-700"
+                          >
+                            <PlusIcon className="w-4 h-4" />
+                            <span>Add Item</span>
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {(step.listItems || []).map((item, itemIndex) => (
+                            <div key={item.id} className="flex items-center space-x-2 bg-white rounded p-2">
+                              <input
+                                type="text"
+                                value={item.text}
+                                onChange={(e) => {
+                                  const updatedItems = [...(step.listItems || [])];
+                                  updatedItems[itemIndex] = { ...item, text: e.target.value };
+                                  updateStep(index, 'listItems', updatedItems);
+                                }}
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                placeholder="List item..."
+                              />
+                              <label className="flex items-center text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={item.isOptional}
+                                  onChange={(e) => {
+                                    const updatedItems = [...(step.listItems || [])];
+                                    updatedItems[itemIndex] = { ...item, isOptional: e.target.checked };
+                                    updateStep(index, 'listItems', updatedItems);
+                                  }}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="ml-1 text-gray-600">Optional</span>
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updatedItems = (step.listItems || []).filter((_, i) => i !== itemIndex);
+                                  updateStep(index, 'listItems', updatedItems);
+                                }}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                          
+                          {(!step.listItems || step.listItems.length === 0) && (
+                            <div className="text-sm text-gray-500 text-center py-2">
+                              No items yet. Click "Add Item" to start building your list.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
                       <div className="flex items-center space-x-4">
                         <div className="flex items-center space-x-2">
                           <label className="text-sm text-gray-700">Duration:</label>

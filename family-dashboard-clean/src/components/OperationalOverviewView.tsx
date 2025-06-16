@@ -1,11 +1,19 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ChartBarIcon,
   CalendarDaysIcon,
   ClockIcon,
   CheckCircleIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  CubeIcon,
+  ListBulletIcon,
+  HeartIcon
 } from '@heroicons/react/24/outline';
+import TodoWidget from './TodoWidget';
+import MealPlannerWidget from './MealPlannerWidget';
+import DogBehaviorWidget from './DogBehaviorWidget';
+import { goalService } from '../services/goalService';
+import { calendarService } from '../services/calendarService';
 
 interface OperationalOverviewViewProps {
   contextId: string;
@@ -16,14 +24,107 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
   contextId,
   userId
 }) => {
-  // Mock data - would be replaced with real data from services
-  const stats = {
-    todayProgress: 65,
-    weekProgress: 42,
-    overdueTasks: 3,
-    upcomingEvents: 7,
-    completedToday: 8,
-    totalToday: 12
+  const [stats, setStats] = useState({
+    todayProgress: 0,
+    weekProgress: 0,
+    overdueTasks: 0,
+    upcomingEvents: 0,
+    completedToday: 0,
+    totalToday: 0,
+    activeGoals: 0,
+    onTrackGoals: 0,
+    needAttentionGoals: 0
+  });
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [upcomingItems, setUpcomingItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (contextId) {
+      loadDashboardData();
+    }
+  }, [contextId]);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load tasks data
+      const tasks = await goalService.getTasksByContext(contextId);
+      const today = new Date().toISOString().split('T')[0];
+      
+      const todayTasks = tasks.filter(task => {
+        return task.scheduledDate === today || 
+               (task.dueDate === today && !task.scheduledDate);
+      });
+      
+      const completedToday = todayTasks.filter(task => task.status === 'completed').length;
+      const overdueTasks = tasks.filter(task => 
+        task.dueDate && task.dueDate < today && task.status !== 'completed'
+      ).length;
+      
+      // Load calendar events for today
+      const todayEvents = await calendarService.getEventsForDateRange(contextId, today, today);
+      
+      // Load goals data
+      const goals = await goalService.getGoalsByContext(contextId);
+      const activeGoals = goals.filter(goal => goal.status === 'in_progress' || goal.status === 'not_started');
+      const onTrackGoals = activeGoals.filter(goal => {
+        // Simple heuristic: goals with recent progress
+        return goal.progress && goal.progress > 0;
+      });
+      
+      // Calculate progress percentages
+      const todayProgress = todayTasks.length > 0 ? Math.round((completedToday / todayTasks.length) * 100) : 0;
+      
+      // Generate recent activity from tasks and events
+      const recentTaskActivity = tasks
+        .filter(task => task.updatedAt && new Date(task.updatedAt).toDateString() === new Date().toDateString())
+        .slice(0, 2)
+        .map(task => ({
+          id: `task-${task.id}`,
+          action: task.status === 'completed' ? 'Completed' : 'Updated',
+          item: task.title,
+          time: new Date(task.updatedAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: 'task'
+        }));
+        
+      // Generate upcoming items from today's schedule
+      const upcomingToday = [
+        ...todayEvents.slice(0, 3).map(event => ({
+          id: `event-${event.id}`,
+          title: event.title,
+          time: new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: 'event'
+        })),
+        ...todayTasks.filter(task => task.status !== 'completed').slice(0, 2).map(task => ({
+          id: `task-${task.id}`,
+          title: task.title,
+          time: task.scheduledDate ? 'Scheduled' : 'Pending',
+          type: 'task'
+        }))
+      ];
+
+      setStats({
+        todayProgress,
+        weekProgress: 42, // Would calculate based on weekly goals
+        overdueTasks,
+        upcomingEvents: todayEvents.length,
+        completedToday,
+        totalToday: todayTasks.length,
+        activeGoals: activeGoals.length,
+        onTrackGoals: onTrackGoals.length,
+        needAttentionGoals: activeGoals.length - onTrackGoals.length
+      });
+      
+      setRecentActivity(recentTaskActivity);
+      setUpcomingItems(upcomingToday);
+      
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const quickMetrics = [
@@ -56,20 +157,6 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
     }
   ];
 
-  const recentActivity = [
-    { id: 1, action: "Completed", item: "Morning Routine", time: "8:30 AM", type: "sop" },
-    { id: 2, action: "Started", item: "Team Meeting", time: "9:00 AM", type: "event" },
-    { id: 3, action: "Scheduled", item: "Grocery Shopping", time: "2:00 PM", type: "task" },
-    { id: 4, action: "Completed", item: "Review Project X", time: "Yesterday", type: "task" }
-  ];
-
-  const upcomingItems = [
-    { id: 1, title: "Lunch Break", time: "12:00 PM", type: "break" },
-    { id: 2, title: "Client Call", time: "2:30 PM", type: "event" },
-    { id: 3, title: "Meal Prep", time: "5:00 PM", type: "task" },
-    { id: 4, title: "Evening Routine", time: "9:00 PM", type: "sop" }
-  ];
-
   const getColorClasses = (color: string) => {
     const colors = {
       blue: "bg-blue-500 text-blue-600 bg-blue-50",
@@ -80,15 +167,39 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
     return colors[color as keyof typeof colors] || colors.blue;
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Operational Overview</h2>
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white rounded-lg border border-gray-200 p-6 animate-pulse">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
+                <div className="ml-4 flex-1">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="h-6 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900">
-          Operational Overview
+          🎯 Operational Overview
         </h2>
         <p className="text-gray-600">
-          Monitor your daily and weekly progress
+          Monitor your daily and weekly progress across all areas
         </p>
       </div>
 
@@ -197,62 +308,152 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
         </div>
       </div>
 
-      {/* Compact Widget Grid */}
+      {/* Smart Widget Grid */}
       <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Tasks Summary */}
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Tasks</h4>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Pending</span>
-              <span className="font-medium">12</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">In Progress</span>
-              <span className="font-medium">3</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Completed Today</span>
-              <span className="font-medium text-green-600">8</span>
-            </div>
+          <div className="flex items-center mb-3">
+            <ListBulletIcon className="w-4 h-4 text-blue-600 mr-2" />
+            <h4 className="text-sm font-medium text-gray-900">Tasks</h4>
           </div>
+          {loading ? (
+            <div className="animate-pulse space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Total Today</span>
+                <span className="font-medium">{stats.totalToday}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Completed</span>
+                <span className="font-medium text-green-600">{stats.completedToday}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Overdue</span>
+                <span className={`font-medium ${stats.overdueTasks > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                  {stats.overdueTasks}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Calendar Summary */}
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Calendar</h4>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Today's Events</span>
-              <span className="font-medium">5</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">This Week</span>
-              <span className="font-medium">23</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Free Time</span>
-              <span className="font-medium text-blue-600">4h 30m</span>
-            </div>
+          <div className="flex items-center mb-3">
+            <CalendarDaysIcon className="w-4 h-4 text-green-600 mr-2" />
+            <h4 className="text-sm font-medium text-gray-900">Calendar</h4>
           </div>
+          {loading ? (
+            <div className="animate-pulse space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Today's Events</span>
+                <span className="font-medium">{stats.upcomingEvents}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Progress</span>
+                <span className="font-medium text-blue-600">{stats.todayProgress}%</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Status</span>
+                <span className={`font-medium text-sm ${stats.overdueTasks > 0 ? 'text-yellow-600' : 'text-green-600'}`}>
+                  {stats.overdueTasks > 0 ? 'Behind' : 'On Track'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Goals Progress */}
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Goals</h4>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Active Goals</span>
-              <span className="font-medium">7</span>
+          <div className="flex items-center mb-3">
+            <CubeIcon className="w-4 h-4 text-purple-600 mr-2" />
+            <h4 className="text-sm font-medium text-gray-900">Goals</h4>
+          </div>
+          {loading ? (
+            <div className="animate-pulse space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">On Track</span>
-              <span className="font-medium text-green-600">5</span>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Active Goals</span>
+                <span className="font-medium">{stats.activeGoals}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">On Track</span>
+                <span className="font-medium text-green-600">{stats.onTrackGoals}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Need Attention</span>
+                <span className="font-medium text-yellow-600">{stats.needAttentionGoals}</span>
+              </div>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Need Attention</span>
-              <span className="font-medium text-yellow-600">2</span>
-            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Existing Widgets Integration */}
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {/* Todo Widget */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+            <h4 className="text-sm font-semibold text-gray-900 flex items-center">
+              <ListBulletIcon className="w-4 h-4 mr-2 text-blue-600" />
+              Quick Tasks
+            </h4>
+          </div>
+          <div className="h-64 overflow-y-auto">
+            <TodoWidget familyId={contextId} userId={userId} />
+          </div>
+        </div>
+
+        {/* Meal Planner Widget */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-yellow-50">
+            <h4 className="text-sm font-semibold text-gray-900 flex items-center">
+              <HeartIcon className="w-4 h-4 mr-2 text-green-600" />
+              Meal Planning
+            </h4>
+          </div>
+          <div className="h-64 overflow-y-auto">
+            <MealPlannerWidget familyId={contextId} userId={userId} />
+          </div>
+        </div>
+
+        {/* Dog Behavior Widget */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
+            <h4 className="text-sm font-semibold text-gray-900 flex items-center">
+              <HeartIcon className="w-4 h-4 mr-2 text-amber-600" />
+              Pet Monitoring
+            </h4>
+          </div>
+          <div className="h-64 overflow-y-auto">
+            <DogBehaviorWidget familyId={contextId} userId={userId} />
+          </div>
+        </div>
+      </div>
+
+      {/* Session Analytics - only show when there's data */}
+      <div className="mt-8">
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h4 className="text-lg font-medium text-gray-900 mb-4">Session Analytics</h4>
+          <div className="text-center text-gray-500 py-8">
+            <ChartBarIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+            <p>Session analytics will appear here when data becomes available</p>
           </div>
         </div>
       </div>

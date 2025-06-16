@@ -1,6 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { todoistService, TodoistTask, TodoistProject } from '../services/todoistService';
 
+/**
+ * Enhanced Todoist Integration Hook with Persistent Connection
+ * 
+ * Features:
+ * - Automatically restores connection from localStorage on page refresh
+ * - Persists API token, selected project, and connection status
+ * - Graceful error handling and connection recovery
+ * - Smart loading states and connection status tracking
+ * 
+ * localStorage keys used:
+ * - 'todoist_api_token': The user's Todoist API token
+ * - 'todoist_selected_project': The currently selected project ID
+ * - 'todoist_connection_status': Tracks if connection was previously successful
+ */
+
 export interface UseTodoistIntegrationReturn {
   isConnected: boolean;
   tasks: TodoistTask[];
@@ -28,7 +43,7 @@ export function useTodoistIntegration(): UseTodoistIntegrationReturn {
   const [tasks, setTasks] = useState<TodoistTask[]>([]);
   const [projects, setProjects] = useState<TodoistProject[]>([]);
   const [selectedProject, setSelectedProjectState] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start as loading to show we're checking connection
   const [error, setError] = useState<string | null>(null);
 
   const refreshProjects = useCallback(async (): Promise<void> => {
@@ -68,24 +83,59 @@ export function useTodoistIntegration(): UseTodoistIntegrationReturn {
       setIsConnected(connected);
       
       if (connected) {
-        await refreshProjects();
-        await refreshTasks();
+        // Save connection status to localStorage
+        localStorage.setItem('todoist_connection_status', 'connected');
+        
+        try {
+          const projectList = await todoistService.getProjects();
+          setProjects(projectList);
+          
+          // Auto-select the first project if none selected and projects exist
+          setSelectedProjectState(prev => {
+            const newProject = prev || (projectList.length > 0 ? projectList[0].id : '');
+            if (newProject && newProject !== prev) {
+              localStorage.setItem('todoist_selected_project', newProject);
+            }
+            return newProject;
+          });
+          
+          // Load tasks for the selected project
+          const currentProject = selectedProject || (projectList.length > 0 ? projectList[0].id : undefined);
+          if (currentProject) {
+            const taskList = await todoistService.getTasks(currentProject);
+            setTasks(taskList.filter(task => !task.is_completed));
+          }
+          
+          setError(null);
+        } catch (err) {
+          console.error('Error loading Todoist data:', err);
+          setError('Failed to load projects and tasks');
+        }
+      } else {
+        // Remove connection status if not connected
+        localStorage.removeItem('todoist_connection_status');
       }
       
+      setLoading(false);
       return connected;
     } catch (err) {
       console.error('Todoist connection test failed:', err);
       setIsConnected(false);
       setError('Failed to connect to Todoist');
+      localStorage.removeItem('todoist_connection_status');
+      setLoading(false);
       return false;
     }
-  }, [refreshProjects, refreshTasks]);
+  }, [selectedProject]);
 
   // Initialize connection on mount
   useEffect(() => {
     const initializeConnection = async () => {
+      setLoading(true);
+      
       const savedToken = localStorage.getItem('todoist_api_token');
       const savedProject = localStorage.getItem('todoist_selected_project');
+      const lastConnectionStatus = localStorage.getItem('todoist_connection_status');
       
       if (savedProject) {
         setSelectedProjectState(savedProject);
@@ -93,7 +143,22 @@ export function useTodoistIntegration(): UseTodoistIntegrationReturn {
       
       if (savedToken) {
         todoistService.setApiToken(savedToken);
-        await testConnection();
+        
+        // If we had a successful connection before, try to reconnect
+        if (lastConnectionStatus === 'connected') {
+          const connected = await testConnection();
+          if (connected) {
+            console.log('Todoist: Successfully restored connection from localStorage');
+          } else {
+            console.log('Todoist: Failed to restore connection, token may be invalid');
+            localStorage.removeItem('todoist_connection_status');
+          }
+        } else {
+          // Just test the connection without trying to load data
+          await testConnection();
+        }
+      } else {
+        setLoading(false);
       }
     };
     
@@ -120,6 +185,9 @@ export function useTodoistIntegration(): UseTodoistIntegrationReturn {
       if (!connected) {
         setError('Invalid API token. Please check and try again.');
         localStorage.removeItem('todoist_api_token');
+        localStorage.removeItem('todoist_connection_status');
+      } else {
+        localStorage.setItem('todoist_connection_status', 'connected');
       }
       
       return connected;
@@ -136,22 +204,20 @@ export function useTodoistIntegration(): UseTodoistIntegrationReturn {
   const disconnectTodoist = useCallback(() => {
     localStorage.removeItem('todoist_api_token');
     localStorage.removeItem('todoist_selected_project');
+    localStorage.removeItem('todoist_connection_status');
     setIsConnected(false);
     setTasks([]);
     setProjects([]);
     setSelectedProjectState('');
     setError(null);
+    setLoading(false);
   }, []);
 
 
   const setSelectedProject = useCallback((projectId: string) => {
     setSelectedProjectState(projectId);
     localStorage.setItem('todoist_selected_project', projectId);
-    // Auto-refresh tasks when project changes
-    if (isConnected) {
-      refreshTasks();
-    }
-  }, [isConnected, refreshTasks]);
+  }, []);
 
   const createTask = useCallback(async (
     content: string, 
@@ -212,9 +278,19 @@ export function useTodoistIntegration(): UseTodoistIntegrationReturn {
   // Refresh tasks when selected project changes
   useEffect(() => {
     if (isConnected && selectedProject) {
-      refreshTasks();
+      const loadTasks = async () => {
+        try {
+          const taskList = await todoistService.getTasks(selectedProject);
+          setTasks(taskList.filter(task => !task.is_completed));
+          setError(null);
+        } catch (err) {
+          console.error('Error loading tasks:', err);
+          setError('Failed to load tasks');
+        }
+      };
+      loadTasks();
     }
-  }, [selectedProject, isConnected, refreshTasks]);
+  }, [selectedProject, isConnected]);
 
   return {
     isConnected,

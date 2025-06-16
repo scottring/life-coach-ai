@@ -204,12 +204,13 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
 
   const handleSchedulableItemDrop = async (item: SchedulableItem, date: string, time: string) => {
     try {
+      const endTime = calculateEndTime(time, item.estimatedDuration);
+      
       if (item.type === 'task') {
         // Schedule the task
         await goalService.scheduleTask(item.id, date, time);
         
         // Create a calendar event for the scheduled task
-        const endTime = calculateEndTime(time, item.estimatedDuration);
         const eventData = {
           title: item.title,
           description: item.description || '',
@@ -233,8 +234,100 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
         };
 
         await calendarService.createEvent(eventData);
-        await loadWeekData(); // Refresh the calendar
+      } else if (item.type === 'sop') {
+        // Create a calendar event for the SOP
+        const eventData = {
+          title: item.title,
+          description: item.description || '',
+          date: date,
+          startTime: time,
+          endTime: endTime,
+          duration: item.estimatedDuration,
+          type: 'sop' as const,
+          sopId: item.id,
+          assignedTo: item.assignedTo,
+          priority: item.priority,
+          color: getPriorityColor(item.priority),
+          contextId: contextId,
+          status: 'scheduled' as const,
+          isDraggable: true,
+          isResizable: true,
+          createdBy: userId
+        };
+
+        await calendarService.createEvent(eventData);
+      } else if (item.type === 'goal') {
+        // Create a calendar event for the goal review
+        const eventData = {
+          title: item.title,
+          description: item.description || '',
+          date: date,
+          startTime: time,
+          endTime: endTime,
+          duration: item.estimatedDuration,
+          type: 'goal_review' as const,
+          goalId: item.goalId,
+          assignedTo: item.assignedTo,
+          priority: item.priority,
+          color: getPriorityColor(item.priority),
+          contextId: contextId,
+          status: 'scheduled' as const,
+          isDraggable: true,
+          isResizable: true,
+          createdBy: userId
+        };
+
+        await calendarService.createEvent(eventData);
+      } else if (item.type === 'milestone') {
+        // Create a calendar event for the milestone
+        const eventData = {
+          title: item.title,
+          description: item.description || '',
+          date: date,
+          startTime: time,
+          endTime: endTime,
+          duration: item.estimatedDuration,
+          type: 'milestone' as const,
+          milestoneId: item.id,
+          goalId: item.goalId,
+          projectId: item.projectId,
+          assignedTo: item.assignedTo,
+          priority: item.priority,
+          color: getPriorityColor(item.priority),
+          contextId: contextId,
+          status: 'scheduled' as const,
+          isDraggable: true,
+          isResizable: true,
+          createdBy: userId
+        };
+
+        await calendarService.createEvent(eventData);
+      } else if (item.type === 'project') {
+        // Create a calendar event for the project review
+        const eventData = {
+          title: item.title,
+          description: item.description || '',
+          date: date,
+          startTime: time,
+          endTime: endTime,
+          duration: item.estimatedDuration,
+          type: 'project_review' as const,
+          projectId: item.id,
+          goalId: item.goalId,
+          assignedTo: item.assignedTo,
+          priority: item.priority,
+          color: getPriorityColor(item.priority),
+          contextId: contextId,
+          status: 'scheduled' as const,
+          isDraggable: true,
+          isResizable: true,
+          createdBy: userId
+        };
+
+        await calendarService.createEvent(eventData);
       }
+      
+      await loadWeekData(); // Refresh the calendar
     } catch (error) {
       console.error('Error scheduling item:', error);
     }

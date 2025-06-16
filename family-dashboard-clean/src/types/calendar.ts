@@ -8,7 +8,7 @@ export interface TimeSlot {
 export interface CalendarEvent {
   id: string;
   contextId: string;
-  type: 'sop' | 'calendar-sync' | 'manual' | 'meal' | 'task' | 'goal_task' | 'recurring_task';
+  type: 'sop' | 'calendar-sync' | 'manual' | 'meal' | 'task' | 'goal_task' | 'recurring_task' | 'goal_review' | 'milestone' | 'project_review' | 'todoist_task';
   
   // Basic info
   title: string;

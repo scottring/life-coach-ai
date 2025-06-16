@@ -52,6 +52,7 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
   const [filters, setFilters] = useState<SidebarFilters>({
     priority: [],
     assignedTo: [],
@@ -134,6 +135,7 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
       } catch (error) {
         console.warn('Failed to load unscheduled tasks:', error);
       }
+
 
       // 2. Load available SOPs (example data for now)
       try {
@@ -531,7 +533,7 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
           {/* Create Actions */}
           <div className="mt-3 flex space-x-2">
             <button
-              onClick={onCreateTask}
+              onClick={() => setShowCreateTaskModal(true)}
               className="flex-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md hover:bg-blue-200 transition-colors"
             >
               <PlusIcon className="w-3 h-3 inline mr-1" />
@@ -646,8 +648,176 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Quick Task Creation Modal */}
+      {showCreateTaskModal && <QuickTaskModal />}
     </>
   );
+
+  function QuickTaskModal() {
+    const [taskTitle, setTaskTitle] = useState('');
+    const [taskDescription, setTaskDescription] = useState('');
+    const [taskPriority, setTaskPriority] = useState<GoalPriority>('medium');
+    const [taskDuration, setTaskDuration] = useState(30);
+    const [taskDueDate, setTaskDueDate] = useState('');
+    const [creating, setCreating] = useState(false);
+
+    const handleCreateTask = async () => {
+      if (!taskTitle.trim()) return;
+
+      setCreating(true);
+      try {
+        // Create task using the goal service
+        const taskData = {
+          title: taskTitle,
+          description: taskDescription,
+          priority: taskPriority,
+          estimatedDuration: taskDuration,
+          dueDate: taskDueDate || undefined,
+          status: 'pending' as const,
+          contextId: contextId,
+          isRecurring: false,
+          dependencies: [],
+          tags: ['quick-add'],
+          assignedTo: undefined,
+          goalId: '', // Will be assigned to inbox/general
+          projectId: undefined,
+          milestoneId: undefined
+        };
+
+        await goalService.createTask(taskData);
+        
+        // Refresh the sidebar data
+        await loadSidebarData();
+        
+        // Close modal and reset form
+        setShowCreateTaskModal(false);
+        setTaskTitle('');
+        setTaskDescription('');
+        setTaskPriority('medium');
+        setTaskDuration(30);
+        setTaskDueDate('');
+      } catch (error) {
+        console.error('Failed to create task:', error);
+      } finally {
+        setCreating(false);
+      }
+    };
+
+    const handleClose = () => {
+      setShowCreateTaskModal(false);
+      setTaskTitle('');
+      setTaskDescription('');
+      setTaskPriority('medium');
+      setTaskDuration(30);
+      setTaskDueDate('');
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Quick Add Task</h3>
+            <button
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Task Title *
+              </label>
+              <input
+                type="text"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                placeholder="Enter task title..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                value={taskDescription}
+                onChange={(e) => setTaskDescription(e.target.value)}
+                placeholder="Optional description..."
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Priority
+                </label>
+                <select
+                  value={taskPriority}
+                  onChange={(e) => setTaskPriority(e.target.value as GoalPriority)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Duration (min)
+                </label>
+                <input
+                  type="number"
+                  value={taskDuration}
+                  onChange={(e) => setTaskDuration(parseInt(e.target.value) || 30)}
+                  min="5"
+                  max="480"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Due Date (optional)
+              </label>
+              <input
+                type="date"
+                value={taskDueDate}
+                onChange={(e) => setTaskDueDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex space-x-3 mt-6">
+            <button
+              onClick={handleClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateTask}
+              disabled={!taskTitle.trim() || creating}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
+            >
+              {creating ? 'Creating...' : 'Create Task'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 };
 
 export default IntelligentSidebar;

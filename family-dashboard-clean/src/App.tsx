@@ -18,6 +18,7 @@ function App() {
   const [demoMode, setDemoMode] = useState(false);
   const [activeContext, setActiveContext] = useState<Context | null>(null);
   const [currentViewMode, setCurrentViewMode] = useState<ViewMode>('daily');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Demo mode for testing without authentication
   const demoUser = { id: 'demo-user', email: 'demo@example.com', name: 'Demo User' };
@@ -44,6 +45,10 @@ function App() {
 
   const handleContextChange = (context: Context) => {
     setActiveContext(context);
+  };
+
+  const triggerRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
   };
 
   if (loading) {
@@ -269,6 +274,8 @@ function App() {
               <DailyItineraryView
                 contextId={demoMode ? demoFamilyId : activeContext?.id || ''}
                 userId={currentUser.id}
+                refreshTrigger={refreshTrigger}
+                onDataChange={triggerRefresh}
               />
             )}
 
@@ -276,6 +283,8 @@ function App() {
               <WeeklyPlanningView
                 contextId={demoMode ? demoFamilyId : activeContext?.id || ''}
                 userId={currentUser.id}
+                refreshTrigger={refreshTrigger}
+                onDataChange={triggerRefresh}
               />
             )}
 

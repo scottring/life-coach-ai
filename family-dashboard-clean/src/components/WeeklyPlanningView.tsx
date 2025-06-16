@@ -4,11 +4,15 @@ import EnhancedWeeklyCalendarWidget from './EnhancedWeeklyCalendarWidget';
 interface WeeklyPlanningViewProps {
   contextId: string;
   userId: string;
+  refreshTrigger?: number;
+  onDataChange?: () => void;
 }
 
 const WeeklyPlanningView: React.FC<WeeklyPlanningViewProps> = ({
   contextId,
-  userId
+  userId,
+  refreshTrigger,
+  onDataChange
 }) => {
   const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
 
@@ -40,7 +44,11 @@ const WeeklyPlanningView: React.FC<WeeklyPlanningViewProps> = ({
           onCreateGoal={handleCreateGoal}
           onCreateProject={handleCreateProject}
           refreshTrigger={sidebarRefreshTrigger}
-          onItemScheduled={() => setSidebarRefreshTrigger(prev => prev + 1)}
+          onItemScheduled={() => {
+            setSidebarRefreshTrigger(prev => prev + 1);
+            onDataChange?.();
+          }}
+          externalRefreshTrigger={refreshTrigger}
         />
       </div>
     </div>

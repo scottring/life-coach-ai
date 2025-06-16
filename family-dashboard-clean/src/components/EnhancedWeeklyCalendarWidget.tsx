@@ -26,6 +26,7 @@ interface EnhancedWeeklyCalendarWidgetProps {
   onCreateProject?: () => void;
   refreshTrigger?: number;
   onItemScheduled?: () => void;
+  externalRefreshTrigger?: number;
 }
 
 const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> = ({
@@ -38,7 +39,8 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
   onCreateGoal,
   onCreateProject,
   refreshTrigger,
-  onItemScheduled
+  onItemScheduled,
+  externalRefreshTrigger
 }) => {
   const [currentWeek, setCurrentWeek] = useState<string>('');
   const [calendarWeek, setCalendarWeek] = useState<CalendarWeek | null>(null);
@@ -76,6 +78,13 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
       setCalendarWeek({ ...calendarWeek });
     }
   }, [viewMode]);
+
+  // Handle external refresh trigger (synchronization with other views)
+  useEffect(() => {
+    if (externalRefreshTrigger !== undefined && externalRefreshTrigger > 0 && currentWeek) {
+      loadWeekData();
+    }
+  }, [externalRefreshTrigger]);
 
   const loadWeekData = async () => {
     try {

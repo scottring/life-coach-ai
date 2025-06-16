@@ -162,4 +162,5 @@ export interface SchedulableItem {
   canSchedule: boolean;
   isRecurring: boolean;
   contextId: string;
+  tags?: string[];
 }

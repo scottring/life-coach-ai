@@ -23,9 +23,11 @@ interface IntelligentSidebarProps {
   isVisible: boolean;
   onToggle: () => void;
   onItemDragStart: (item: SchedulableItem) => void;
+  onItemScheduled?: (item: SchedulableItem) => void;
   onCreateTask: () => void;
   onCreateGoal: () => void;
   onCreateProject: () => void;
+  refreshTrigger?: number; // Add this to trigger refresh from parent
 }
 
 interface SidebarFilters {
@@ -43,9 +45,11 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
   isVisible,
   onToggle,
   onItemDragStart,
+  onItemScheduled,
   onCreateTask,
   onCreateGoal,
-  onCreateProject
+  onCreateProject,
+  refreshTrigger
 }) => {
   const [items, setItems] = useState<SchedulableItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<SchedulableItem[]>([]);
@@ -66,11 +70,82 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
     if (contextId) {
       loadSidebarData();
     }
-  }, [contextId]);
+  }, [contextId, refreshTrigger]);
+
+  // Function to remove item from sidebar when scheduled
+  const handleItemScheduled = (item: SchedulableItem) => {
+    setItems(prevItems => prevItems.filter(i => i.id !== item.id));
+    setFilteredItems(prevItems => prevItems.filter(i => i.id !== item.id));
+    onItemScheduled?.(item);
+  };
+
 
   useEffect(() => {
     applyFilters();
   }, [items, filters]);
+
+  // Handle quick add from inbox input
+  const handleQuickAdd = async (title: string) => {
+    if (!title.trim()) return;
+
+    try {
+      const taskData = {
+        title: title.trim(),
+        description: '',
+        priority: 'medium' as GoalPriority,
+        estimatedDuration: 30,
+        status: 'pending' as const,
+        contextId: contextId,
+        isRecurring: false,
+        dependencies: [],
+        tags: ['inbox', 'quick-add'],
+        assignedTo: undefined,
+        dueDate: undefined,
+        goalId: '',
+        projectId: undefined,
+        milestoneId: undefined
+      };
+
+      await goalService.createTask(taskData);
+      await loadSidebarData(); // Refresh the sidebar
+    } catch (error) {
+      console.error('Failed to create quick task:', error);
+    }
+  };
+
+  // Component for inbox task items (simpler layout)
+  const InboxTaskItem = ({ item }: { item: SchedulableItem }) => (
+    <div
+      draggable
+      onDragStart={(e) => handleDragStart(e, item)}
+      className={`bg-gray-50 border border-gray-200 rounded-md p-2 cursor-move hover:shadow-sm transition-shadow border-l-4 ${getPriorityBorderColor(item.priority)}`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <CheckCircleIcon className="w-3 h-3 text-gray-400" />
+          <span className="text-sm font-medium text-gray-900">{item.title}</span>
+        </div>
+        {getPriorityIcon(item.priority)}
+      </div>
+      
+      {item.description && (
+        <p className="text-xs text-gray-600 mt-1 ml-5">{item.description}</p>
+      )}
+      
+      <div className="flex items-center justify-between mt-2 ml-5 text-xs text-gray-500">
+        <span>{item.estimatedDuration}m</span>
+        {item.dueDate && (
+          <span className={
+            isOverdue(item.dueDate) ? 'text-red-600' :
+            isDueToday(item.dueDate) ? 'text-orange-600' :
+            'text-gray-500'
+          }>
+            {formatDueDate(item.dueDate)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 
   const sortSchedulableItems = (items: SchedulableItem[]): SchedulableItem[] => {
     return items.sort((a, b) => {
@@ -556,16 +631,71 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
           </div>
         </div>
 
+        {/* Quick Inbox Entry */}
+        <div className="border-b border-gray-200 p-4">
+          <h4 className="text-sm font-medium text-gray-700 mb-3">📥 Inbox</h4>
+          <div className="space-y-2">
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                placeholder="Quick add: task, idea, reminder..."
+                className="flex-1 text-sm px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleQuickAdd(e.currentTarget.value);
+                    e.currentTarget.value = '';
+                  }
+                }}
+              />
+              <button
+                onClick={() => setShowCreateTaskModal(true)}
+                className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+                title="Detailed task creation"
+              >
+                <PlusIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              Press Enter for quick add or click + for detailed options
+            </p>
+          </div>
+        </div>
+
         {/* Items List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {filteredItems.length === 0 ? (
+        <div className="flex-1 overflow-y-auto">
+          {/* Inbox Tasks */}
+          <div className="p-4 border-b border-gray-100">
+            <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              Inbox Tasks ({filteredItems.filter(item => item.tags?.includes('inbox')).length})
+            </h5>
+            <div className="space-y-2">
+              {filteredItems
+                .filter(item => item.tags?.includes('inbox'))
+                .map((item) => (
+                  <InboxTaskItem key={item.id} item={item} />
+                ))}
+              {filteredItems.filter(item => item.tags?.includes('inbox')).length === 0 && (
+                <p className="text-xs text-gray-400 italic">No inbox tasks</p>
+              )}
+            </div>
+          </div>
+
+          {/* Suggested Items */}
+          <div className="p-4">
+            <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              Suggestions ({filteredItems.filter(item => !item.tags?.includes('inbox')).length})
+            </h5>
+            <div className="space-y-3">
+          {filteredItems.filter(item => !item.tags?.includes('inbox')).length === 0 ? (
             <div className="text-center text-gray-500 py-8">
               <CheckCircleIcon className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-              <p className="text-sm">No unscheduled items</p>
+              <p className="text-sm">No suggested items</p>
               <p className="text-xs text-gray-400">All caught up!</p>
             </div>
           ) : (
-            filteredItems.map((item) => (
+            filteredItems
+              .filter(item => !item.tags?.includes('inbox'))
+              .map((item) => (
               <div
                 key={item.id}
                 draggable
@@ -621,9 +751,12 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
                     </span>
                   </div>
                 )}
+
               </div>
             ))
           )}
+            </div>
+          </div>
         </div>
 
         {/* Stats Footer */}

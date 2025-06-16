@@ -46,6 +46,7 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
   const [eventDetailModal, setEventDetailModal] = useState<CalendarEvent | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [viewMode, setViewMode] = useState<1 | 3 | 5 | 7>(7); // Number of days to show
+  const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
   
   const calendarRef = useRef<HTMLDivElement>(null);
 
@@ -328,6 +329,9 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
       }
       
       await loadWeekData(); // Refresh the calendar
+      
+      // Trigger sidebar refresh to remove scheduled item
+      setSidebarRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error('Error scheduling item:', error);
     }
@@ -578,6 +582,7 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
         onCreateTask={onCreateTask || (() => {})}
         onCreateGoal={onCreateGoal || (() => {})}
         onCreateProject={onCreateProject || (() => {})}
+        refreshTrigger={sidebarRefreshTrigger}
       />
 
       {/* Main Calendar Content */}

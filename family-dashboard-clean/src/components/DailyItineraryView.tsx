@@ -19,6 +19,9 @@ interface DailyItineraryViewProps {
   userId: string;
   refreshTrigger?: number;
   onDataChange?: () => void;
+  showViewToggle?: boolean;
+  currentView?: 'daily' | 'weekly';
+  onViewChange?: (view: 'daily' | 'weekly') => void;
 }
 
 interface TimelineItem {
@@ -40,7 +43,10 @@ const DailyItineraryView: React.FC<DailyItineraryViewProps> = ({
   contextId,
   userId,
   refreshTrigger,
-  onDataChange
+  onDataChange,
+  showViewToggle = false,
+  currentView = 'daily',
+  onViewChange
 }) => {
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -667,39 +673,47 @@ const DailyItineraryView: React.FC<DailyItineraryViewProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              Today's Itinerary
-            </h2>
-            <p className="text-gray-600">
-              {new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </p>
-          </div>
-          
-          {/* Inbox Toggle */}
-          <div className="flex items-center space-x-2">
-            <label className="text-sm text-gray-700">Show Inbox Items</label>
+      {/* Header with toggles */}
+      <div className="mb-6 flex items-center justify-between">
+        {showViewToggle && onViewChange && (
+          <div className="flex items-center bg-gray-100 rounded-lg p-1">
             <button
-              onClick={() => setShowInboxItems(!showInboxItems)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                showInboxItems ? 'bg-blue-600' : 'bg-gray-200'
+              onClick={() => onViewChange('daily')}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                currentView === 'daily'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  showInboxItems ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
+              Daily
+            </button>
+            <button
+              onClick={() => onViewChange('weekly')}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                currentView === 'weekly'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Weekly
             </button>
           </div>
+        )}
+        
+        <div className="flex items-center space-x-2">
+          <label className="text-sm text-gray-700">Show Inbox Items</label>
+          <button
+            onClick={() => setShowInboxItems(!showInboxItems)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              showInboxItems ? 'bg-blue-600' : 'bg-gray-200'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                showInboxItems ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
         </div>
       </div>
 

@@ -8,7 +8,7 @@ export interface TimeSlot {
 export interface CalendarEvent {
   id: string;
   contextId: string;
-  type: 'sop' | 'calendar-sync' | 'manual' | 'meal' | 'task';
+  type: 'sop' | 'calendar-sync' | 'manual' | 'meal' | 'task' | 'goal_task' | 'recurring_task';
   
   // Basic info
   title: string;
@@ -30,7 +30,11 @@ export interface CalendarEvent {
   sopId?: string; // if type === 'sop'
   googleEventId?: string; // if type === 'calendar-sync'
   mealId?: string; // if type === 'meal'
-  taskId?: string; // if type === 'task'
+  taskId?: string; // if type === 'task' | 'goal_task' | 'recurring_task'
+  goalId?: string; // for goal-related events
+  projectId?: string; // for project-related events
+  milestoneId?: string; // for milestone-related events
+  priority?: string; // for goal tasks
   
   // Drag and drop
   isDraggable: boolean;

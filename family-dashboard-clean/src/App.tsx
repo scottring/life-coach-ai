@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
-import FamilyDashboard from './components/FamilyDashboard';
+import EnhancedFamilyDashboard from './components/EnhancedFamilyDashboard';
 import ContextSwitcher from './components/ContextSwitcher';
 import { Context } from './types/context';
 import { contextService } from './services/contextService';
@@ -255,7 +255,7 @@ function App() {
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {activeContext || demoMode ? (
-          <FamilyDashboard 
+          <EnhancedFamilyDashboard 
             contextId={demoMode ? demoFamilyId : activeContext?.id || ''} 
             userId={currentUser.id}
             contextType={demoMode ? 'family' : activeContext?.type || 'family'}

@@ -8,7 +8,8 @@ import {
   EllipsisVerticalIcon,
   TagIcon,
   PencilIcon,
-  TrashIcon
+  TrashIcon,
+  Bars3Icon
 } from '@heroicons/react/24/outline';
 import { SOP, SOPCategory } from '../types/sop';
 import { ContextMember } from '../types/context';
@@ -38,6 +39,7 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [editingSOP, setEditingSOP] = useState<SOP | null>(null);
   const [showDropdown, setShowDropdown] = useState<string | null>(null);
+  const [hoveredSOP, setHoveredSOP] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -220,7 +222,36 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
           filteredSOPs.map(sop => (
             <div
               key={sop.id}
-              className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors bg-white"
+              className="relative border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors bg-white cursor-move"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/json', JSON.stringify({
+                  type: 'sop_item',
+                  data: {
+                    id: sop.id,
+                    name: sop.name,
+                    description: sop.description,
+                    category: sop.category,
+                    estimatedDuration: sop.estimatedDuration,
+                    difficulty: sop.difficulty,
+                    tags: sop.tags,
+                    isRecurring: sop.isRecurring,
+                    recurrence: sop.recurrence,
+                    assignableMembers: sop.assignableMembers,
+                    defaultAssignee: sop.defaultAssignee,
+                    steps: sop.steps
+                  }
+                }));
+                // Add visual feedback during drag
+                e.currentTarget.style.opacity = '0.5';
+              }}
+              onDragEnd={(e) => {
+                // Reset visual feedback
+                e.currentTarget.style.opacity = '1';
+              }}
+              onMouseEnter={() => setHoveredSOP(sop.id)}
+              onMouseLeave={() => setHoveredSOP(null)}
+              title="Drag to Calendar & Planning widget to schedule"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
@@ -291,6 +322,13 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
 
                 {/* Actions */}
                 <div className="flex items-center space-x-2 ml-4">
+                  <div 
+                    className="p-1.5 text-gray-400 hover:text-gray-600 cursor-move"
+                    title="Drag to schedule in Calendar & Planning"
+                  >
+                    <Bars3Icon className="w-4 h-4" />
+                  </div>
+                  
                   <button
                     onClick={() => onExecuteSOP?.(sop)}
                     className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm"
@@ -340,6 +378,83 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Tooltip */}
+              {hoveredSOP === sop.id && (
+                <div className="absolute left-full top-0 ml-2 z-50 w-80 bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-h-96 overflow-y-auto">
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-1">{sop.name}</h4>
+                      {sop.description && (
+                        <p className="text-sm text-gray-600 mb-2">{sop.description}</p>
+                      )}
+                      <div className="flex items-center space-x-3 text-xs text-gray-500">
+                        <span>{formatDuration(sop.estimatedDuration)}</span>
+                        <span>•</span>
+                        <span>{sop.steps.length} steps</span>
+                        <span>•</span>
+                        <span className="capitalize">{sop.difficulty}</span>
+                      </div>
+                    </div>
+
+                    {sop.steps.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-medium text-gray-700 mb-2">Steps:</h5>
+                        <div className="space-y-2">
+                          {sop.steps.map((step, index) => (
+                            <div key={step.id} className="text-sm">
+                              <div className="flex items-start space-x-2">
+                                <span className="text-xs text-gray-400 mt-0.5">{index + 1}.</span>
+                                <div className="flex-1">
+                                  <div className="font-medium text-gray-900">{step.title}</div>
+                                  {step.description && (
+                                    <div className="text-gray-600 mt-1">{step.description}</div>
+                                  )}
+                                  {step.type === 'list' && step.listItems && step.listItems.length > 0 && (
+                                    <div className="mt-2 ml-3">
+                                      <div className="text-xs font-medium text-gray-600 mb-1">List items:</div>
+                                      <ul className="space-y-1">
+                                        {step.listItems.map((item) => (
+                                          <li key={item.id} className="flex items-start space-x-2 text-xs">
+                                            <span className="text-gray-400">•</span>
+                                            <span className={item.isOptional ? 'text-gray-500 italic' : 'text-gray-700'}>
+                                              {item.text}
+                                              {item.isOptional && <span className="ml-1">(optional)</span>}
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center space-x-3 mt-1 text-xs text-gray-500">
+                                    <span>{step.estimatedDuration} min</span>
+                                    {step.isOptional && <span className="bg-gray-100 px-1 rounded">Optional</span>}
+                                    {step.type === 'embedded_sop' && <span className="bg-blue-100 px-1 rounded">Embedded SOP</span>}
+                                    {step.type === 'list' && <span className="bg-green-100 px-1 rounded">Checklist</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {sop.tags.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-medium text-gray-700 mb-1">Tags:</h5>
+                        <div className="flex flex-wrap gap-1">
+                          {sop.tags.map(tag => (
+                            <span key={tag} className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ))
         )}

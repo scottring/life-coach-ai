@@ -119,6 +119,15 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
       position: { x: 0, y: 1 },
       size: { width: 1, height: 1 },
       minimized: false
+    },
+    { 
+      id: 'project-lists', 
+      domain: 'universal', 
+      name: 'Project Lists',
+      visible: true,
+      position: { x: 1, y: 1 },
+      size: { width: 1, height: 1 },
+      minimized: false
     }
   ]);
 

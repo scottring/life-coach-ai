@@ -6,12 +6,17 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   EyeIcon,
-  EyeSlashIcon
+  EyeSlashIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 import { CalendarEvent } from '../types/calendar';
 import { SchedulableItem } from '../types/goals';
 import { calendarService } from '../services/calendarService';
 import { goalService } from '../services/goalService';
+import { sopService } from '../services/sopService';
+import { SOP } from '../types/sop';
+import InboxWidget from './InboxWidget';
+import ProjectListWidget from './ProjectListWidget';
 
 interface ConductorScoreProps {
   contextId: string;
@@ -61,6 +66,8 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SOP[]>([]);
 
   useEffect(() => {
     loadTodaysSymphony();
@@ -76,6 +83,34 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
 
     return () => clearInterval(interval);
   }, [contextId, selectedDomain, refreshTrigger]);
+
+  // Search effect for SOPs
+  useEffect(() => {
+    const searchSOPs = async () => {
+      if (searchQuery.trim().length < 2) {
+        setSearchResults([]);
+        return;
+      }
+
+      try {
+        const allSOPs = await sopService.getSOPsForContext(contextId);
+        const filtered = allSOPs.filter(sop => 
+          sop.status === 'active' &&
+          (sop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           sop.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           sop.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())))
+        ).slice(0, 4); // Limit to 4 results for compact view
+        
+        setSearchResults(filtered);
+      } catch (error) {
+        console.error('Error searching SOPs:', error);
+        setSearchResults([]);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchSOPs, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery, contextId]);
 
   const scrollToCurrentTime = () => {
     if (timelineRef.current) {
@@ -352,6 +387,42 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
     }
   };
 
+  const handleScheduleProjectItem = async (projectItem: any, timeSlot: string) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const endTime = calculateEndTime(timeSlot, projectItem.estimatedDuration || 30);
+      
+      // Create a calendar event for the project item
+      const calendarEvent = {
+        contextId,
+        type: 'manual' as const,
+        title: `${projectItem.title} (${projectItem.projectName})`,
+        description: `Project: ${projectItem.projectName}`,
+        color: '#3B82F6', // Blue color for project items
+        date: today,
+        startTime: timeSlot,
+        endTime,
+        duration: projectItem.estimatedDuration || 30,
+        assignedTo: userId,
+        status: 'scheduled' as const,
+        isDraggable: true,
+        isResizable: true,
+        createdBy: userId
+      };
+
+      await calendarService.createEvent(calendarEvent);
+      
+      // Refresh the view
+      await loadTodaysSymphony();
+      onDataChange?.();
+      onInboxRefresh?.();
+      
+    } catch (error) {
+      console.error('Error scheduling project item:', error);
+      alert('Failed to schedule project item. Please try again.');
+    }
+  };
+
   const calculateEndTime = (startTime: string, durationMinutes: number): string => {
     const [hours, minutes] = startTime.split(':').map(Number);
     const startDate = new Date();
@@ -617,6 +688,9 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
                               if (parsed.type === 'schedulable_item' && parsed.data) {
                                 await handleScheduleItem(parsed.data, timeSlot);
                                 onInboxRefresh?.();
+                              } else if (parsed.type === 'project_item' && parsed.data) {
+                                await handleScheduleProjectItem(parsed.data, timeSlot);
+                                onInboxRefresh?.();
                               }
                             }
                           } catch (error) {
@@ -692,11 +766,28 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
           </div>
         </div>
 
-        {/* Unscheduled Items */}
-        <div className="lg:col-span-1">
+        {/* Right Sidebar */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Universal Inbox */}
+          <InboxWidget
+            contextId={contextId}
+            userId={userId}
+            onItemScheduled={onDataChange}
+            compact={true}
+          />
+
+          {/* Project Lists */}
+          <ProjectListWidget
+            contextId={contextId}
+            userId={userId}
+            onItemScheduled={onDataChange}
+            compact={true}
+          />
+
+          {/* Unscheduled Items */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <div>
                   <h3 className="font-medium text-gray-900">📋 Unscheduled Items</h3>
                   <p className="text-sm text-gray-600">Ready to schedule</p>
@@ -713,10 +804,60 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
                   )}
                 </button>
               </div>
+              
+              {/* Search Input */}
+              <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search SOPs to add..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+              </div>
             </div>
             {showUnscheduled && (
               <div className="p-4">
-                {unscheduledMovements.length === 0 ? (
+                {/* Search Results */}
+                {searchResults.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">SOP Search Results</h4>
+                    <div className="space-y-2">
+                      {searchResults.map((sop) => (
+                        <div
+                          key={`search-${sop.id}`}
+                          className="p-3 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors cursor-move"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('application/json', JSON.stringify({
+                              type: 'sop_item',
+                              data: sop
+                            }));
+                          }}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <span className="text-lg flex-shrink-0">📋</span>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-medium text-gray-900 truncate">{sop.name}</h4>
+                              <div className="flex items-center space-x-3 mt-1">
+                                <span className="text-xs text-gray-500">{sop.estimatedDuration} min</span>
+                                <span className="text-xs text-gray-500">•</span>
+                                <span className="text-xs text-gray-500">{sop.steps.length} steps</span>
+                                <div 
+                                  className="w-2 h-2 rounded-full"
+                                  style={{ backgroundColor: sopService.getCategoryColor(sop.category) }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {unscheduledMovements.length === 0 && searchResults.length === 0 ? (
                 <div className="text-center py-8">
                   <CheckCircleIcon className="w-12 h-12 mx-auto text-green-300 mb-4" />
                   <p className="text-sm text-gray-500">All composed!</p>

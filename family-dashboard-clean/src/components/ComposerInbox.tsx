@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import InboxWidget from './InboxWidget';
+import { MagnifyingGlassIcon, Bars3Icon } from '@heroicons/react/24/outline';
+import { sopService } from '../services/sopService';
+import { SOP } from '../types/sop';
 
 interface ComposerInboxProps {
   contextId: string;
@@ -22,6 +25,40 @@ const ComposerInbox: React.FC<ComposerInboxProps> = ({
   onDataChange,
   refreshTrigger
 }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SOP[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Debounced search effect
+  useEffect(() => {
+    const searchSOPs = async () => {
+      if (searchQuery.trim().length < 2) {
+        setSearchResults([]);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const allSOPs = await sopService.getSOPsForContext(contextId);
+        const filtered = allSOPs.filter(sop => 
+          sop.status === 'active' &&
+          (sop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           sop.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           sop.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())))
+        ).slice(0, 6); // Limit to 6 results
+        
+        setSearchResults(filtered);
+      } catch (error) {
+        console.error('Error searching SOPs:', error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchSOPs, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery, contextId]);
   return (
     <div className="space-y-6">
       {/* Universal Inbox */}
@@ -32,27 +69,83 @@ const ComposerInbox: React.FC<ComposerInboxProps> = ({
         refreshTrigger={refreshTrigger}
       />
 
-      {/* Quick Add Actions */}
+      {/* Smart Search */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-4 border-b border-gray-200">
-          <h3 className="font-medium text-gray-900">➕ Quick Add</h3>
-          <p className="text-sm text-gray-600">Add to any life area</p>
+          <h3 className="font-medium text-gray-900">🔍 Search to Schedule</h3>
+          <p className="text-sm text-gray-600">Find SOPs to add to calendar</p>
         </div>
-        <div className="p-4 space-y-3">
-          {lifeDomains.filter(d => d.active).map((domain) => (
-            <button
-              key={domain.id}
-              className={`w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-${domain.color}-50 transition-colors`}
-            >
-              <div className="flex items-center space-x-3">
-                <span className="text-lg">{domain.icon}</span>
-                <div>
-                  <div className="font-medium text-gray-900">{domain.name}</div>
-                  <div className="text-xs text-gray-500">Add new item</div>
+        <div className="p-4">
+          {/* Search Input */}
+          <div className="relative mb-4">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search SOPs..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            />
+          </div>
+
+          {/* Search Results */}
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {isSearching && (
+              <div className="text-center py-4 text-sm text-gray-500">
+                Searching...
+              </div>
+            )}
+            
+            {!isSearching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
+              <div className="text-center py-4 text-sm text-gray-500">
+                No SOPs found for "{searchQuery}"
+              </div>
+            )}
+            
+            {!isSearching && searchQuery.trim().length < 2 && (
+              <div className="text-center py-4 text-sm text-gray-400">
+                Type at least 2 characters to search
+              </div>
+            )}
+
+            {searchResults.map((sop) => (
+              <div
+                key={sop.id}
+                className="flex items-center p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 cursor-move transition-colors"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/json', JSON.stringify({
+                    type: 'sop_item',
+                    data: sop
+                  }));
+                  e.currentTarget.style.opacity = '0.5';
+                }}
+                onDragEnd={(e) => {
+                  e.currentTarget.style.opacity = '1';
+                }}
+                title="Drag to Calendar & Planning widget to schedule"
+              >
+                <Bars3Icon className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2">
+                    <h4 className="text-sm font-medium text-gray-900 truncate">{sop.name}</h4>
+                    <div 
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: sopService.getCategoryColor(sop.category) }}
+                    />
+                  </div>
+                  {sop.description && (
+                    <p className="text-xs text-gray-600 truncate mt-1">{sop.description}</p>
+                  )}
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="text-xs text-gray-500">{sop.estimatedDuration} min</span>
+                    <span className="text-xs text-gray-500">•</span>
+                    <span className="text-xs text-gray-500">{sop.steps.length} steps</span>
+                  </div>
                 </div>
               </div>
-            </button>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 

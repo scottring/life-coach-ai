@@ -109,6 +109,15 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
       position: { x: 1, y: 2 },
       size: { width: 1, height: 1 },
       minimized: false
+    },
+    { 
+      id: 'sop-widget', 
+      domain: 'universal', 
+      name: 'Standard Operating Procedures',
+      visible: true,
+      position: { x: 0, y: 1 },
+      size: { width: 1, height: 1 },
+      minimized: false
     }
   ]);
 
@@ -257,35 +266,41 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
 
       {/* Widget Controller Panel */}
       {showWidgetController && (
-        <div className="fixed top-20 right-6 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-40 w-80">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Widget Settings</h3>
-            <button
-              onClick={() => setShowWidgetController(false)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="space-y-2">
-            {widgetConfig.map((widget) => (
-              <div key={widget.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
-                <div>
-                  <div className="font-medium text-sm">{widget.name}</div>
-                  <div className="text-xs text-gray-500">{widget.domain}</div>
+        <>
+          <div 
+            className="fixed inset-0 z-50" 
+            onClick={() => setShowWidgetController(false)}
+          />
+          <div className="fixed top-20 right-6 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-[60] w-80">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900">Widget Settings</h3>
+              <button
+                onClick={() => setShowWidgetController(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-2">
+              {widgetConfig.map((widget) => (
+                <div key={widget.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                  <div>
+                    <div className="font-medium text-sm">{widget.name}</div>
+                    <div className="text-xs text-gray-500">{widget.domain}</div>
+                  </div>
+                  <button
+                    onClick={() => toggleWidget(widget.id)}
+                    className={`p-1 rounded ${
+                      widget.visible ? 'text-blue-600' : 'text-gray-400'
+                    }`}
+                  >
+                    {widget.visible ? <EyeIcon className="w-4 h-4" /> : <EyeSlashIcon className="w-4 h-4" />}
+                  </button>
                 </div>
-                <button
-                  onClick={() => toggleWidget(widget.id)}
-                  className={`p-1 rounded ${
-                    widget.visible ? 'text-blue-600' : 'text-gray-400'
-                  }`}
-                >
-                  {widget.visible ? <EyeIcon className="w-4 h-4" /> : <EyeSlashIcon className="w-4 h-4" />}
-                </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Main Dashboard Content */}

@@ -3,6 +3,7 @@ import CalendaringWidget from './CalendaringWidget';
 import TodoWidget from './TodoWidget';
 import MealPlannerWidget from './MealPlannerWidget';
 import DogBehaviorWidget from './DogBehaviorWidget';
+import SOPWidget from './SOPWidget';
 
 interface InstrumentPanelProps {
   contextId: string;
@@ -95,6 +96,13 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
                 <div className="text-center py-8 text-gray-500">
                   🥁 Wellness Rhythm - Coming Soon
                 </div>
+              )}
+
+              {widget.id === 'sop-widget' && (
+                <SOPWidget 
+                  contextId={contextId} 
+                  userId={userId}
+                />
               )}
             </div>
           </div>

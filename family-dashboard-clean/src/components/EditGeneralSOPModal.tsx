@@ -16,7 +16,7 @@ import { contextService } from '../services/contextService';
 interface EditGeneralSOPModalProps {
   isOpen: boolean;
   onClose: () => void;
-  sop: SOP;
+  sop?: SOP;
   contextId: string;
   userId?: string;
   onSOPUpdated?: () => void;
@@ -32,19 +32,19 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
   onSOPUpdated,
   onSOPDeleted
 }) => {
-  const [name, setName] = useState(sop.name);
-  const [description, setDescription] = useState(sop.description || '');
-  const [category, setCategory] = useState<SOPCategory>(sop.category);
-  const [difficulty, setDifficulty] = useState(sop.difficulty);
-  const [tags, setTags] = useState(sop.tags.join(', '));
-  const [steps, setSteps] = useState<SOPStep[]>(sop.steps);
+  const [name, setName] = useState(sop?.name || '');
+  const [description, setDescription] = useState(sop?.description || '');
+  const [category, setCategory] = useState<SOPCategory>(sop?.category || 'custom');
+  const [difficulty, setDifficulty] = useState(sop?.difficulty || 'medium');
+  const [tags, setTags] = useState(sop?.tags.join(', ') || '');
+  const [steps, setSteps] = useState<SOPStep[]>(sop?.steps || []);
   const [members, setMembers] = useState<ContextMember[]>([]);
-  const [assignableMembers, setAssignableMembers] = useState<string[]>(sop.assignableMembers);
-  const [defaultAssignee, setDefaultAssignee] = useState(sop.defaultAssignee || '');
-  const [requiresConfirmation, setRequiresConfirmation] = useState(sop.requiresConfirmation);
-  const [isRecurring, setIsRecurring] = useState(sop.isRecurring);
-  const [canBeEmbedded, setCanBeEmbedded] = useState(sop.canBeEmbedded);
-  const [isStandalone, setIsStandalone] = useState(sop.isStandalone);
+  const [assignableMembers, setAssignableMembers] = useState<string[]>(sop?.assignableMembers || []);
+  const [defaultAssignee, setDefaultAssignee] = useState(sop?.defaultAssignee || '');
+  const [requiresConfirmation, setRequiresConfirmation] = useState(sop?.requiresConfirmation || false);
+  const [isRecurring, setIsRecurring] = useState(sop?.isRecurring || false);
+  const [canBeEmbedded, setCanBeEmbedded] = useState(sop?.canBeEmbedded || false);
+  const [isStandalone, setIsStandalone] = useState(sop?.isStandalone ?? true);
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [availableSOPs, setAvailableSOPs] = useState<SOP[]>([]);
@@ -53,18 +53,18 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
     if (isOpen) {
       loadMembers();
       // Reset form when sop changes
-      setName(sop.name);
-      setDescription(sop.description || '');
-      setCategory(sop.category);
-      setDifficulty(sop.difficulty);
-      setTags(sop.tags.join(', '));
-      setSteps(sop.steps);
-      setAssignableMembers(sop.assignableMembers);
-      setDefaultAssignee(sop.defaultAssignee || '');
-      setRequiresConfirmation(sop.requiresConfirmation);
-      setIsRecurring(sop.isRecurring);
-      setCanBeEmbedded(sop.canBeEmbedded);
-      setIsStandalone(sop.isStandalone);
+      setName(sop?.name || '');
+      setDescription(sop?.description || '');
+      setCategory(sop?.category || 'custom');
+      setDifficulty(sop?.difficulty || 'medium');
+      setTags(sop?.tags.join(', ') || '');
+      setSteps(sop?.steps || []);
+      setAssignableMembers(sop?.assignableMembers || []);
+      setDefaultAssignee(sop?.defaultAssignee || '');
+      setRequiresConfirmation(sop?.requiresConfirmation || false);
+      setIsRecurring(sop?.isRecurring || false);
+      setCanBeEmbedded(sop?.canBeEmbedded || false);
+      setIsStandalone(sop?.isStandalone ?? true);
     }
   }, [isOpen, sop]);
 
@@ -76,7 +76,7 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
       ]);
       setMembers(membersData);
       // Filter out the current SOP to prevent self-embedding
-      setAvailableSOPs(embeddableSOPs.filter(s => s.id !== sop.id));
+      setAvailableSOPs(embeddableSOPs.filter(s => s.id !== sop?.id));
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -197,7 +197,18 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
         isStandalone
       };
 
-      await sopService.updateSOP(sop.id, updates);
+      if (sop?.id) {
+        // Update existing SOP
+        await sopService.updateSOP(sop.id, updates);
+      } else {
+        // Create new SOP
+        const newSOPData = {
+          ...updates,
+          createdBy: userId || '',
+          status: 'active' as const
+        };
+        await sopService.createSOP(contextId, newSOPData as Omit<SOP, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'estimatedDuration'>);
+      }
       onSOPUpdated?.();
       onClose();
     } catch (error) {
@@ -209,6 +220,8 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
   };
 
   const handleDelete = async () => {
+    if (!sop?.id) return;
+    
     setLoading(true);
     try {
       await sopService.deleteSOP(sop.id);
@@ -233,7 +246,7 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
   ];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Edit SOP">
+    <Modal isOpen={isOpen} onClose={onClose} title={sop ? "Edit SOP" : "Create New SOP"}>
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Info */}
         <div className="space-y-4">
@@ -696,13 +709,15 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-4 border-t">
-          <button
-            type="button"
-            onClick={() => setShowDeleteConfirm(true)}
-            className="px-4 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-          >
-            Delete SOP
-          </button>
+          {sop && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="px-4 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+            >
+              Delete SOP
+            </button>
+          )}
           
           <div className="flex items-center space-x-3">
             <button
@@ -717,7 +732,7 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
               disabled={loading}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Updating...' : 'Update SOP'}
+              {loading ? (sop ? 'Updating...' : 'Creating...') : (sop ? 'Update SOP' : 'Create SOP')}
             </button>
           </div>
         </div>
@@ -729,7 +744,7 @@ const EditGeneralSOPModal: React.FC<EditGeneralSOPModalProps> = ({
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete SOP</h3>
             <p className="text-gray-600 mb-4">
-              Are you sure you want to delete "{sop.name}"? This action cannot be undone.
+              Are you sure you want to delete "{sop?.name}"? This action cannot be undone.
             </p>
             <div className="flex items-center justify-end space-x-3">
               <button

@@ -259,7 +259,7 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
               placeholder="Enter project name..."
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               autoFocus
-              onKeyPress={(e) => e.key === 'Enter' && addProject()}
+              onKeyDown={(e) => e.key === 'Enter' && addProject()}
             />
             <div className="flex justify-end space-x-2 mt-2">
               <button
@@ -328,7 +328,7 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
                           onChange={(e) => setNewItemTexts({ ...newItemTexts, [project.id]: e.target.value })}
                           placeholder="Add task to this project..."
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          onKeyPress={(e) => e.key === 'Enter' && addItem(project.id)}
+                          onKeyDown={(e) => e.key === 'Enter' && addItem(project.id)}
                         />
                         <button
                           onClick={() => addItem(project.id)}

@@ -6,6 +6,7 @@ import MealPlannerWidget from './MealPlannerWidget';
 import DogBehaviorWidget from './DogBehaviorWidget';
 import SOPWidget from './SOPWidget';
 import ProjectListWidget from './ProjectListWidget';
+import EditGeneralSOPModal from './EditGeneralSOPModal';
 
 interface InstrumentPanelProps {
   contextId: string;
@@ -40,6 +41,7 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
 }) => {
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null);
   const [dragOverWidget, setDragOverWidget] = useState<string | null>(null);
+  const [showCreateSOP, setShowCreateSOP] = useState(false);
 
   const handleDragStart = (e: React.DragEvent, widgetId: string) => {
     setDraggedWidget(widgetId);
@@ -170,6 +172,7 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
                 <SOPWidget 
                   contextId={contextId} 
                   userId={userId}
+                  onCreateSOP={() => setShowCreateSOP(true)}
                 />
               )}
 
@@ -184,6 +187,20 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
           </div>
         );
       })}
+      
+      {/* Create SOP Modal */}
+      {showCreateSOP && (
+        <EditGeneralSOPModal
+          isOpen={showCreateSOP}
+          onClose={() => setShowCreateSOP(false)}
+          contextId={contextId}
+          userId={userId}
+          onSOPUpdated={() => {
+            setShowCreateSOP(false);
+            onDataChange?.();
+          }}
+        />
+      )}
     </div>
   );
 };

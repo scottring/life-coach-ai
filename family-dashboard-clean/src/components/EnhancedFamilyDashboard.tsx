@@ -262,7 +262,7 @@ const EnhancedFamilyDashboard: React.FC<EnhancedFamilyDashboardProps> = ({
           <div className="p-4" style={{ background: 'white' }}>
             <TodoWidget 
               key={`todo-${goalRefreshKey}`}
-              familyId={contextId} 
+              contextId={contextId} 
               userId={userId} 
             />
           </div>

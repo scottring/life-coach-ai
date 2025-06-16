@@ -198,9 +198,22 @@ const InboxWidget: React.FC<InboxWidgetProps> = ({
         ) : (
           <div className="space-y-3">
             {displayItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-gray-900 truncate">{item.title}</h4>
+              <div 
+                key={item.id} 
+                className="flex items-start justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-move"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/json', JSON.stringify({
+                    type: 'schedulable_item',
+                    data: item
+                  }));
+                }}
+                title="Drag to schedule or use buttons below"
+              >
+                <div className="flex-1 min-w-0 pr-3">
+                  <h4 className="text-sm font-medium text-gray-900 leading-snug mb-1" title={item.title}>
+                    {item.title}
+                  </h4>
                   {item.description && (
                     <p className="text-xs text-gray-500 truncate">{item.description}</p>
                   )}
@@ -219,12 +232,12 @@ const InboxWidget: React.FC<InboxWidgetProps> = ({
                 </div>
                 
                 {!compact && (
-                  <div className="flex items-center space-x-2 ml-3">
-                    <button className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200">
-                      Schedule
+                  <div className="flex flex-col space-y-1 flex-shrink-0">
+                    <button className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 whitespace-nowrap">
+                      📅 Schedule
                     </button>
-                    <button className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200">
-                      Defer
+                    <button className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 whitespace-nowrap">
+                      ⏰ Defer
                     </button>
                   </div>
                 )}

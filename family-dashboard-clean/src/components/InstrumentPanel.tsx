@@ -78,7 +78,7 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
               )}
               
               {widget.id === 'family-planning' && (
-                <TodoWidget familyId={contextId} userId={userId} />
+                <TodoWidget contextId={contextId} userId={userId} domain="family" />
               )}
               
               {widget.id === 'meal-planning' && (

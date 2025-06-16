@@ -156,6 +156,8 @@ export interface SchedulableItem {
   priority: GoalPriority;
   assignedTo?: string;
   dueDate?: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
   goalId?: string;
   projectId?: string;
   milestoneId?: string;

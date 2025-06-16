@@ -5,7 +5,8 @@ import {
   SparklesIcon,
   Cog6ToothIcon,
   EyeIcon,
-  EyeSlashIcon
+  EyeSlashIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import ConductorScore from './ConductorScore';
 import InstrumentPanel from './InstrumentPanel';
@@ -45,15 +46,22 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
 }) => {
   const [activeView, setActiveView] = useState<'conductor' | 'rehearsal'>('conductor');
   const [showWidgetController, setShowWidgetController] = useState(false);
+  const [selectedDomain, setSelectedDomain] = useState<string>('universal');
+  const [showDomainDropdown, setShowDomainDropdown] = useState(false);
   
   // Life Domains (Orchestra Sections)
   const [lifeDomains, setLifeDomains] = useState<LifeDomain[]>([
-    { id: 'work', name: 'Work', icon: '🎻', color: 'blue', active: true, position: 1 },
-    { id: 'family', name: 'Family', icon: '🎼', color: 'green', active: true, position: 2 },
-    { id: 'personal', name: 'Personal', icon: '🎵', color: 'purple', active: true, position: 3 },
-    { id: 'health', name: 'Health', icon: '🥁', color: 'red', active: true, position: 4 },
-    { id: 'home', name: 'Home', icon: '🎺', color: 'yellow', active: true, position: 5 },
+    { id: 'work', name: 'Work', icon: '💼', color: 'blue', active: true, position: 1 },
+    { id: 'family', name: 'Family', icon: '👨‍👩‍👧‍👦', color: 'green', active: true, position: 2 },
+    { id: 'personal', name: 'Personal', icon: '🧘', color: 'purple', active: true, position: 3 },
+    { id: 'health', name: 'Health', icon: '🏃', color: 'red', active: true, position: 4 },
+    { id: 'home', name: 'Home', icon: '🏠', color: 'yellow', active: true, position: 5 },
   ]);
+
+  const domainOptions = [
+    { id: 'universal', name: 'Universal (All Areas)', icon: '🌐' },
+    ...lifeDomains
+  ];
 
   // Widget Configuration
   const [widgetConfig, setWidgetConfig] = useState<WidgetConfig[]>([
@@ -112,13 +120,6 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
     compositionProgress: 67 // Day completion percentage
   });
 
-  const toggleDomain = (domainId: string) => {
-    setLifeDomains(prev => prev.map(domain => 
-      domain.id === domainId 
-        ? { ...domain, active: !domain.active }
-        : domain
-    ));
-  };
 
   const toggleWidget = (widgetId: string) => {
     setWidgetConfig(prev => prev.map(widget =>
@@ -204,23 +205,52 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
             </div>
           </div>
 
-          {/* Life Areas */}
-          <div className="flex items-center space-x-2 mt-4">
-            <span className="text-sm text-gray-600 mr-2">Life Areas:</span>
-            {lifeDomains.map((domain) => (
+          {/* Domain Selector */}
+          <div className="flex items-center space-x-4 mt-4">
+            <span className="text-sm text-gray-600">Focus Area:</span>
+            <div className="relative">
               <button
-                key={domain.id}
-                onClick={() => toggleDomain(domain.id)}
-                className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium transition-all ${
-                  domain.active
-                    ? `bg-${domain.color}-100 text-${domain.color}-700 border border-${domain.color}-200`
-                    : 'bg-gray-100 text-gray-500 border border-gray-200'
-                }`}
+                onClick={() => setShowDomainDropdown(!showDomainDropdown)}
+                className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               >
-                <span>{domain.icon}</span>
-                <span>{domain.name}</span>
+                <span className="text-lg">
+                  {domainOptions.find(d => d.id === selectedDomain)?.icon || '🌐'}
+                </span>
+                <span className="font-medium text-gray-900">
+                  {domainOptions.find(d => d.id === selectedDomain)?.name || 'Universal'}
+                </span>
+                <ChevronDownIcon className={`w-4 h-4 text-gray-500 transition-transform ${showDomainDropdown ? 'rotate-180' : ''}`} />
               </button>
-            ))}
+
+              {showDomainDropdown && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowDomainDropdown(false)}
+                  />
+                  <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                    {domainOptions.map((domain) => (
+                      <button
+                        key={domain.id}
+                        onClick={() => {
+                          setSelectedDomain(domain.id);
+                          setShowDomainDropdown(false);
+                        }}
+                        className={`w-full flex items-center space-x-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                          selectedDomain === domain.id ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                        }`}
+                      >
+                        <span className="text-lg">{domain.icon}</span>
+                        <span className="font-medium">{domain.name}</span>
+                        {selectedDomain === domain.id && (
+                          <span className="ml-auto text-blue-600">✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -265,6 +295,7 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
             contextId={contextId}
             userId={userId}
             lifeDomains={lifeDomains}
+            selectedDomain={selectedDomain}
             refreshTrigger={refreshTrigger}
             onDataChange={onDataChange}
           />

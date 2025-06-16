@@ -153,7 +153,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ contextId, userId, co
             </div>
           </div>
           <div className="p-4" style={{ background: 'white' }}>
-            <TodoWidget familyId={contextId} userId={userId} />
+            <TodoWidget contextId={contextId} userId={userId} />
           </div>
         </div>
       </ResponsiveGridLayout>

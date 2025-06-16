@@ -13,7 +13,7 @@ import { sopService } from '../services/sopService';
 import { contextService } from '../services/contextService';
 import { goalService } from '../services/goalService';
 import EventDetailModal from './EventDetailModal';
-import IntelligentSidebar from './IntelligentSidebar';
+// import IntelligentSidebar from './IntelligentSidebar';
 
 interface EnhancedWeeklyCalendarWidgetProps {
   contextId: string;
@@ -50,9 +50,9 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
   const [dragOverSlot, setDragOverSlot] = useState<{ date: string; time: string } | null>(null);
   const [showContextMenu, setShowContextMenu] = useState<{ x: number; y: number; event: CalendarEvent } | null>(null);
   const [eventDetailModal, setEventDetailModal] = useState<CalendarEvent | null>(null);
-  const [sidebarVisible, setSidebarVisible] = useState(true);
+  // const [sidebarVisible, setSidebarVisible] = useState(true);
   const [viewMode, setViewMode] = useState<1 | 3 | 5 | 7>(7); // Number of days to show
-  const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
+  // const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
   
   const calendarRef = useRef<HTMLDivElement>(null);
 
@@ -170,9 +170,6 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
     setDraggedItem({ type, data });
   };
 
-  const handleSidebarItemDragStart = (item: SchedulableItem) => {
-    setDraggedItem({ type: 'schedulable_item', data: item });
-  };
 
   const handleDragOver = (e: React.DragEvent, date: string, time: string) => {
     e.preventDefault();
@@ -343,8 +340,7 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
       
       await loadWeekData(); // Refresh the calendar
       
-      // Trigger sidebar refresh to remove scheduled item
-      setSidebarRefreshTrigger(prev => prev + 1);
+      // Sidebar removed - no longer needed
       onItemScheduled?.();
     } catch (error) {
       console.error('Error scheduling item:', error);
@@ -586,24 +582,8 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
 
   return (
     <div className="relative w-full h-full">
-      {/* Intelligent Sidebar */}
-      <IntelligentSidebar
-        contextId={contextId}
-        userId={userId}
-        isVisible={sidebarVisible}
-        onToggle={() => setSidebarVisible(!sidebarVisible)}
-        onItemDragStart={handleSidebarItemDragStart}
-        onItemScheduled={onItemScheduled}
-        onCreateTask={onCreateTask || (() => {})}
-        onCreateGoal={onCreateGoal || (() => {})}
-        onCreateProject={onCreateProject || (() => {})}
-        refreshTrigger={refreshTrigger || sidebarRefreshTrigger}
-      />
-
       {/* Main Calendar Content */}
-      <div 
-        className={`transition-all duration-300 ${sidebarVisible ? 'ml-64' : 'ml-0'}`}
-      >
+      <div className="w-full">
         {/* Header */}
         <div className="bg-white border-b border-gray-200 p-4 relative z-20">
           <div className="flex items-center justify-between">

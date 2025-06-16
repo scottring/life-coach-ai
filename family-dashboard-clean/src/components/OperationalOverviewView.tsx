@@ -237,7 +237,7 @@ const OperationalOverviewView: React.FC<OperationalOverviewViewProps> = ({
           />
           
           {/* Todo/Goals Widget */}
-          <TodoWidget familyId={contextId} userId={userId} />
+          <TodoWidget contextId={contextId} userId={userId} />
           
           {/* Meal Planning Widget */}
           <MealPlannerWidget familyId={contextId} userId={userId} />

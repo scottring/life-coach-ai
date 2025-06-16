@@ -4,7 +4,9 @@ import {
   SparklesIcon,
   ArrowRightIcon,
   ExclamationTriangleIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  EyeIcon,
+  EyeSlashIcon
 } from '@heroicons/react/24/outline';
 import { CalendarEvent } from '../types/calendar';
 import { SchedulableItem } from '../types/goals';
@@ -21,6 +23,7 @@ interface ConductorScoreProps {
     color: string;
     active: boolean;
   }>;
+  selectedDomain: string;
   refreshTrigger?: number;
   onDataChange?: () => void;
 }
@@ -44,6 +47,7 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
   contextId,
   userId,
   lifeDomains,
+  selectedDomain,
   refreshTrigger,
   onDataChange
 }) => {
@@ -51,6 +55,9 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [showUnscheduled, setShowUnscheduled] = useState(true);
+  const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
 
   useEffect(() => {
     loadTodaysSymphony();
@@ -61,7 +68,7 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [contextId, refreshTrigger]);
+  }, [contextId, selectedDomain, refreshTrigger]);
 
   const loadTodaysSymphony = async () => {
     try {
@@ -69,22 +76,55 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
       const today = new Date().toISOString().split('T')[0];
       
       // Load all scheduled events and unscheduled tasks
-      const [events, tasks] = await Promise.all([
+      const [events, allTasks, inboxTasks] = await Promise.all([
         calendarService.getEventsForDay(contextId, today),
-        goalService.getSchedulableTasks(contextId)
+        goalService.getSchedulableTasks(contextId),
+        goalService.getTasksWithTag(contextId, 'inbox')
       ]);
 
-      // Filter tasks for today's unscheduled items
-      const todayTasks = tasks.filter(task => {
+      // Filter tasks for today's unscheduled items (exclude already scheduled ones)
+      const todayTasks = allTasks.filter(task => {
         const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : null;
-        return (dueDate === today || task.tags?.includes('inbox')) && !task.status || task.status !== 'completed';
+        const isScheduled = task.scheduledDate && task.scheduledTime;
+        return (dueDate === today && task.status !== 'completed' && !isScheduled);
       });
+
+      // Combine with inbox tasks that aren't completed and aren't scheduled
+      const inboxItems = inboxTasks.filter(task => {
+        const isScheduled = task.scheduledDate && task.scheduledTime;
+        return task.status !== 'completed' && !isScheduled;
+      });
+      const allUnscheduledTasks = [...todayTasks, ...inboxItems];
+      
+      // Remove duplicates
+      const uniqueTasks = allUnscheduledTasks.reduce((acc, task) => {
+        if (!acc.find(t => t.id === task.id)) {
+          acc.push(task);
+        }
+        return acc;
+      }, [] as typeof allUnscheduledTasks);
+
+      // Filter by selected domain
+      const domainFilteredTasks = selectedDomain === 'universal' 
+        ? uniqueTasks 
+        : uniqueTasks.filter(task => {
+            const taskDomain = getDomainFromTask(task);
+            return taskDomain === selectedDomain;
+          });
+
+      // Filter events by selected domain
+      const domainFilteredEvents = selectedDomain === 'universal'
+        ? events
+        : events.filter(event => {
+            const eventDomain = getDomainFromEvent(event);
+            return eventDomain === selectedDomain;
+          });
 
       // Convert to symphony movements
       const symphonyMovements: SymphonyMovement[] = [];
 
       // Add scheduled events
-      events.forEach(event => {
+      domainFilteredEvents.forEach(event => {
         const domain = getDomainFromEvent(event);
         const domainConfig = lifeDomains.find(d => d.id === domain) || lifeDomains[0];
         
@@ -99,13 +139,13 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
           icon: domainConfig.icon,
           status: getTimeStatus(event.startTime, event.endTime),
           energy: getEnergyLevel(event.startTime),
-          harmony: calculateHarmony(event, events),
+          harmony: calculateHarmony(event, domainFilteredEvents),
           originalData: event
         });
       });
 
       // Add unscheduled items as potential movements
-      todayTasks.forEach(task => {
+      domainFilteredTasks.forEach(task => {
         const domain = getDomainFromTask(task);
         const domainConfig = lifeDomains.find(d => d.id === domain) || lifeDomains[0];
         
@@ -229,13 +269,98 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
 
   const generateAISuggestions = (movements: SymphonyMovement[]) => {
     const suggestions = [
+      "🖱️ Drag unscheduled items from the right sidebar to time slots to schedule them",
       "💡 Consider adding a 15-minute buffer before your important meeting",
       "⚡ Your energy peaks at 2 PM - perfect time for that challenging task", 
       "🍽️ Family dinner at 6 PM aligns well with your work wrap-up",
       "💪 Morning workout would boost your entire day's energy"
     ];
-    setAiSuggestions(suggestions.slice(0, 2));
+    
+    // Always show the drag tip if there are unscheduled items
+    const unscheduledCount = movements.filter(m => !m.startTime).length;
+    if (unscheduledCount > 0) {
+      setAiSuggestions([suggestions[0], suggestions[1]]);
+    } else {
+      setAiSuggestions(suggestions.slice(1, 3));
+    }
   };
+
+  // Drag and drop handlers
+  const handleScheduleItem = async (item: SchedulableItem, timeSlot: string) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const endTime = calculateEndTime(timeSlot, item.estimatedDuration || 30);
+      
+      // Create a calendar event for the scheduled item
+      const eventData = {
+        title: item.title,
+        description: item.description || '',
+        date: today,
+        startTime: timeSlot,
+        endTime: endTime,
+        duration: item.estimatedDuration || 30,
+        type: 'goal_task' as const,
+        taskId: item.id,
+        goalId: item.goalId,
+        projectId: item.projectId,
+        milestoneId: item.milestoneId,
+        assignedTo: item.assignedTo,
+        priority: item.priority,
+        color: getPriorityColor(item.priority),
+        contextId: contextId,
+        status: 'scheduled' as const,
+        isDraggable: true,
+        isResizable: true,
+        createdBy: userId
+      };
+
+      await calendarService.createEvent(eventData);
+      
+      // Update the task to mark it as scheduled
+      await goalService.scheduleTask(item.id, today, timeSlot);
+      
+      // Refresh the view
+      await loadTodaysSymphony();
+      onDataChange?.();
+      
+    } catch (error) {
+      console.error('Error scheduling item:', error);
+      alert('Failed to schedule item. Please try again.');
+    }
+  };
+
+  const calculateEndTime = (startTime: string, durationMinutes: number): string => {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const startDate = new Date();
+    startDate.setHours(hours, minutes, 0, 0);
+    
+    const endDate = new Date(startDate.getTime() + (durationMinutes * 60 * 1000));
+    
+    return `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const getPriorityColor = (priority: string): string => {
+    switch (priority) {
+      case 'critical': return '#dc2626';
+      case 'high': return '#ea580c';
+      case 'medium': return '#d97706';
+      case 'low': return '#65a30d';
+      default: return '#6b7280';
+    }
+  };
+
+  const generateTimeSlots = (): string[] => {
+    const slots = [];
+    for (let hour = 6; hour <= 22; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        slots.push(timeString);
+      }
+    }
+    return slots;
+  };
+
+  const timeSlots = generateTimeSlots();
 
   const getCurrentTimePosition = (): number => {
     const now = currentTime;
@@ -247,6 +372,97 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
     const dayDuration = dayEnd - dayStart;
     const position = ((totalMinutes - dayStart) / dayDuration) * 100;
     return Math.max(0, Math.min(100, position));
+  };
+
+  const getCurrentTimeSlot = (): string => {
+    const now = currentTime;
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    
+    // Round to nearest 30-minute slot
+    const roundedMinutes = minutes < 30 ? 0 : 30;
+    return `${hours.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
+  };
+
+  const formatTime = (time: string): string => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
+  const handleQuickSchedule = async (item: SchedulableItem) => {
+    try {
+      // Find the next available time slot (current time rounded up to next 30-min slot)
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      
+      // Round up to next 30-minute slot
+      let nextSlotHour = currentHour;
+      let nextSlotMinute = currentMinute <= 30 ? 30 : 0;
+      if (nextSlotMinute === 0) {
+        nextSlotHour += 1;
+      }
+      
+      // Format as time string
+      const nextTimeSlot = `${nextSlotHour.toString().padStart(2, '0')}:${nextSlotMinute.toString().padStart(2, '0')}`;
+      
+      await handleScheduleItem(item, nextTimeSlot);
+    } catch (error) {
+      console.error('Error quick scheduling item:', error);
+      alert('Failed to schedule item. Please try again.');
+    }
+  };
+
+  const handleDeferItem = async (item: SchedulableItem) => {
+    try {
+      const deferOptions = [
+        { label: 'Later Today (6 PM)', hours: 18, minutes: 0 },
+        { label: 'Tomorrow Morning (9 AM)', hours: 9, minutes: 0, nextDay: true },
+        { label: 'End of Week (Friday 9 AM)', days: 'friday' },
+        { label: 'Next Week (Monday 9 AM)', days: 'nextMonday' }
+      ];
+
+      // Simple prompt for now - in production you'd want a proper modal
+      const choice = prompt(
+        `Defer "${item.title}" to:\n` +
+        deferOptions.map((opt, i) => `${i + 1}. ${opt.label}`).join('\n') +
+        '\n\nEnter choice (1-4):'
+      );
+
+      if (!choice || isNaN(parseInt(choice)) || parseInt(choice) < 1 || parseInt(choice) > 4) {
+        return;
+      }
+
+      const selectedOption = deferOptions[parseInt(choice) - 1];
+      let deferDate = new Date();
+      
+      if (selectedOption.nextDay) {
+        deferDate.setDate(deferDate.getDate() + 1);
+      } else if (selectedOption.days === 'friday') {
+        const daysToFriday = (5 - deferDate.getDay() + 7) % 7 || 7;
+        deferDate.setDate(deferDate.getDate() + daysToFriday);
+      } else if (selectedOption.days === 'nextMonday') {
+        const daysToNextMonday = (8 - deferDate.getDay()) % 7 || 7;
+        deferDate.setDate(deferDate.getDate() + daysToNextMonday);
+      }
+
+      if (selectedOption.hours !== undefined) {
+        deferDate.setHours(selectedOption.hours, selectedOption.minutes || 0, 0, 0);
+      }
+
+      await goalService.updateTask(item.id, {
+        dueDate: deferDate.toISOString()
+      });
+
+      await loadTodaysSymphony();
+      onDataChange?.();
+      
+    } catch (error) {
+      console.error('Error deferring item:', error);
+      alert('Failed to defer item. Please try again.');
+    }
   };
 
   if (loading) {
@@ -282,9 +498,9 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Schedule - Today's Itinerary */}
-        <div className="xl:col-span-3">
+        <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
@@ -308,7 +524,7 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
               </div>
             </div>
 
-            <div className="p-6 relative">
+            <div className="p-6 relative min-h-96">
               {/* Current Time Indicator */}
               <div 
                 className="absolute left-6 right-6 h-0.5 bg-red-500 z-10"
@@ -320,33 +536,171 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
                 </div>
               </div>
 
-              {/* Symphony Movements */}
-              <div className="space-y-3">
-                {scheduledMovements.map((movement) => (
-                  <div
-                    key={movement.id}
-                    className={`border-l-4 rounded-lg p-4 transition-all duration-200 hover:shadow-md ${
-                      movement.status === 'current' ? 'bg-blue-50 border-blue-500' :
-                      movement.status === 'completed' ? 'bg-green-50 border-green-500' :
-                      movement.status === 'overdue' ? 'bg-red-50 border-red-500' :
-                      movement.type === 'transition' ? 'bg-gray-50 border-gray-300' :
-                      'bg-white border-gray-200'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
+              {/* Time-based Schedule Grid */}
+              <div className="space-y-2">
+                {timeSlots.map((timeSlot) => {
+                  const scheduledEvent = scheduledMovements.find(m => m.startTime === timeSlot);
+                  const isCurrentTime = getCurrentTimeSlot() === timeSlot;
+                  const isDragOver = dragOverSlot === timeSlot;
+                  
+                  return (
+                    <div key={timeSlot} className="flex items-center space-x-4">
+                      {/* Time Label */}
+                      <div className="w-20 text-sm text-gray-600 font-mono">
+                        {formatTime(timeSlot)}
+                      </div>
+                      
+                      {/* Event/Drop Zone */}
+                      <div 
+                        className={`flex-1 min-h-12 rounded-lg border-2 border-dashed transition-all duration-200 ${
+                          scheduledEvent 
+                            ? 'border-transparent' 
+                            : isDragOver 
+                              ? 'border-blue-400 bg-blue-50' 
+                              : 'border-gray-200 hover:border-gray-300'
+                        } ${isCurrentTime ? 'ring-2 ring-red-400 ring-opacity-50' : ''}`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverSlot(timeSlot);
+                        }}
+                        onDragLeave={() => {
+                          setDragOverSlot(null);
+                        }}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          setDragOverSlot(null);
+                          
+                          try {
+                            const transferData = e.dataTransfer.getData('application/json');
+                            if (transferData) {
+                              const parsed = JSON.parse(transferData);
+                              if (parsed.type === 'schedulable_item' && parsed.data) {
+                                await handleScheduleItem(parsed.data, timeSlot);
+                              }
+                            }
+                          } catch (error) {
+                            console.error('Error handling drop:', error);
+                          }
+                        }}
+                      >
+                        {scheduledEvent ? (
+                          // Existing scheduled event
+                          <div 
+                            className={`h-full p-3 rounded-lg border-l-4 cursor-pointer hover:shadow-md transition-shadow ${
+                              scheduledEvent.status === 'current' ? 'bg-blue-50 border-blue-500' :
+                              scheduledEvent.status === 'completed' ? 'bg-green-50 border-green-500' :
+                              scheduledEvent.status === 'overdue' ? 'bg-red-50 border-red-500' :
+                              'bg-white border-gray-200'
+                            }`}
+                            onClick={() => {
+                              if (scheduledEvent.originalData && 'id' in scheduledEvent.originalData) {
+                                setEditingEvent(scheduledEvent.originalData as CalendarEvent);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <span className="text-lg">{scheduledEvent.icon}</span>
+                                <div>
+                                  <h4 className="font-medium text-gray-900">{scheduledEvent.title}</h4>
+                                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                                    <span className={`px-2 py-0.5 rounded-full text-xs ${
+                                      scheduledEvent.domain === 'work' ? 'bg-blue-100 text-blue-700' :
+                                      scheduledEvent.domain === 'family' ? 'bg-green-100 text-green-700' :
+                                      scheduledEvent.domain === 'health' ? 'bg-red-100 text-red-700' :
+                                      scheduledEvent.domain === 'home' ? 'bg-yellow-100 text-yellow-700' :
+                                      'bg-purple-100 text-purple-700'
+                                    }`}>
+                                      {scheduledEvent.domain}
+                                    </span>
+                                    <span>{scheduledEvent.startTime} - {scheduledEvent.endTime}</span>
+                                    {scheduledEvent.originalData && 'type' in scheduledEvent.originalData && 
+                                     (scheduledEvent.originalData as CalendarEvent).type === 'sop' && (
+                                      <span className="text-xs bg-purple-100 text-purple-700 px-1 py-0.5 rounded">SOP</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              {scheduledEvent.status === 'current' && (
+                                <span className="flex items-center text-blue-600 text-sm font-medium">
+                                  <span className="w-2 h-2 bg-blue-600 rounded-full mr-2 animate-pulse"></span>
+                                  Now
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          // Empty time slot - drop zone
+                          <div className="h-full flex items-center justify-center text-gray-400">
+                            {isDragOver ? (
+                              <div className="flex items-center space-x-2 text-blue-600 font-medium">
+                                <span>📅</span>
+                                <span>Drop to schedule here</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs opacity-50">Available</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Unscheduled Items */}
+        <div className="lg:col-span-1">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-gray-900">📋 Unscheduled Items</h3>
+                  <p className="text-sm text-gray-600">Ready to schedule</p>
+                </div>
+                <button 
+                  onClick={() => setShowUnscheduled(!showUnscheduled)}
+                  className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                  title={showUnscheduled ? "Hide unscheduled items" : "Show unscheduled items"}
+                >
+                  {showUnscheduled ? (
+                    <EyeSlashIcon className="w-5 h-5 text-gray-600" />
+                  ) : (
+                    <EyeIcon className="w-5 h-5 text-gray-600" />
+                  )}
+                </button>
+              </div>
+            </div>
+            {showUnscheduled && (
+              <div className="p-4">
+                {unscheduledMovements.length === 0 ? (
+                <div className="text-center py-8">
+                  <CheckCircleIcon className="w-12 h-12 mx-auto text-green-300 mb-4" />
+                  <p className="text-sm text-gray-500">All composed!</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {unscheduledMovements.map((movement) => (
+                    <div 
+                      key={movement.id} 
+                      className="p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors cursor-move"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('application/json', JSON.stringify({
+                          type: 'schedulable_item',
+                          data: movement.originalData
+                        }));
+                      }}
+                    >
                       <div className="flex items-start space-x-3">
-                        <div className={`p-2 rounded-lg ${
-                          movement.status === 'current' ? 'bg-blue-100 text-blue-600' :
-                          movement.status === 'completed' ? 'bg-green-100 text-green-600' :
-                          movement.status === 'overdue' ? 'bg-red-100 text-red-600' :
-                          'bg-gray-100 text-gray-600'
-                        }`}>
-                          <span className="text-lg">{movement.icon}</span>
-                        </div>
-                        
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <h3 className="font-medium text-gray-900">{movement.title}</h3>
+                        <span className="text-xl flex-shrink-0">{movement.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-medium text-gray-900 leading-tight mb-2">
+                            {movement.title}
+                          </h4>
+                          <div className="flex items-center justify-between">
                             <span className={`text-xs px-2 py-1 rounded-full ${
                               movement.domain === 'work' ? 'bg-blue-100 text-blue-700' :
                               movement.domain === 'family' ? 'bg-green-100 text-green-700' :
@@ -356,80 +710,21 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
                             }`}>
                               {movement.domain}
                             </span>
-                          </div>
-                          
-                          <div className="flex items-center space-x-4 text-sm text-gray-600">
-                            <div className="flex items-center space-x-1">
-                              <ClockIcon className="w-4 h-4" />
-                              <span>{movement.startTime} - {movement.endTime}</span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <span>⚡</span>
-                              <span className="capitalize">{movement.energy} Energy</span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <span>🎵</span>
-                              <span>{movement.harmony}% Harmony</span>
-                            </div>
+                            <span className="text-xs text-gray-500">Drag to schedule</span>
                           </div>
                         </div>
                       </div>
-
-                      <div className="flex items-center space-x-2">
-                        {movement.status === 'current' && (
-                          <span className="flex items-center text-blue-600 text-sm font-medium">
-                            <span className="w-2 h-2 bg-blue-600 rounded-full mr-2 animate-pulse"></span>
-                            Playing Now
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Unscheduled Items */}
-        <div className="xl:col-span-1">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="font-medium text-gray-900">📋 Unscheduled Items</h3>
-              <p className="text-sm text-gray-600">Ready to schedule</p>
-            </div>
-            <div className="p-4">
-              {unscheduledMovements.length === 0 ? (
-                <div className="text-center py-8">
-                  <CheckCircleIcon className="w-12 h-12 mx-auto text-green-300 mb-4" />
-                  <p className="text-sm text-gray-500">All composed!</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {unscheduledMovements.map((movement) => (
-                    <div key={movement.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex items-start space-x-2">
-                        <span className="text-lg">{movement.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-medium text-gray-900 truncate">{movement.title}</h4>
-                          <div className="flex items-center space-x-2 mt-1">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              movement.domain === 'work' ? 'bg-blue-100 text-blue-700' :
-                              movement.domain === 'family' ? 'bg-green-100 text-green-700' :
-                              movement.domain === 'health' ? 'bg-red-100 text-red-700' :
-                              movement.domain === 'home' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-purple-100 text-purple-700'
-                            }`}>
-                              {movement.domain}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex space-x-2">
-                        <button className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200">
+                      <div className="mt-3 flex space-x-2">
+                        <button 
+                          onClick={() => handleQuickSchedule(movement.originalData as SchedulableItem)}
+                          className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-md hover:bg-blue-200 transition-colors"
+                        >
                           📅 Schedule
                         </button>
-                        <button className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200">
+                        <button 
+                          onClick={() => handleDeferItem(movement.originalData as SchedulableItem)}
+                          className="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-md hover:bg-purple-200 transition-colors"
+                        >
                           ⏰ Defer
                         </button>
                       </div>
@@ -437,10 +732,113 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
                   ))}
                 </div>
               )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Edit Event Modal */}
+      {editingEvent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {editingEvent.type === 'sop' ? 'Edit SOP' : 'Edit Event'}
+                </h3>
+                <button
+                  onClick={() => setEditingEvent(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    value={editingEvent.title}
+                    onChange={(e) => setEditingEvent({...editingEvent, title: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={editingEvent.description || ''}
+                    onChange={(e) => setEditingEvent({...editingEvent, description: e.target.value})}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Time
+                    </label>
+                    <input
+                      type="time"
+                      value={editingEvent.startTime}
+                      onChange={(e) => setEditingEvent({...editingEvent, startTime: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      End Time
+                    </label>
+                    <input
+                      type="time"
+                      value={editingEvent.endTime}
+                      onChange={(e) => setEditingEvent({...editingEvent, endTime: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setEditingEvent(null)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await calendarService.updateEvent(editingEvent.id, {
+                        title: editingEvent.title,
+                        description: editingEvent.description,
+                        startTime: editingEvent.startTime,
+                        endTime: editingEvent.endTime
+                      });
+                      setEditingEvent(null);
+                      await loadTodaysSymphony();
+                      onDataChange?.();
+                    } catch (error) {
+                      console.error('Error updating event:', error);
+                      alert('Failed to update event. Please try again.');
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

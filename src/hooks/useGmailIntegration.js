@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+iimport { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuthState } from './useAuthState';
 import { processEmails } from '../lib/emailProcessor';

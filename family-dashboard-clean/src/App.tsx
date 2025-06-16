@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import ContextSwitcher from './components/ContextSwitcher';
-import OperationalOverviewView from './components/OperationalOverviewView';
+import SymphonyDashboard from './components/SymphonyDashboard';
 import { Context } from './types/context';
 import { contextService } from './services/contextService';
 
@@ -278,7 +278,7 @@ function App() {
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {activeContext || demoMode ? (
-          <OperationalOverviewView
+          <SymphonyDashboard
             contextId={demoMode ? demoFamilyId : activeContext?.id || ''}
             userId={currentUser.id}
             refreshTrigger={refreshTrigger}

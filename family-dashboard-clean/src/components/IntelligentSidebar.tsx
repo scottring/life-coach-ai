@@ -114,39 +114,161 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
     }
   };
 
-  // Component for inbox task items (simpler layout)
-  const InboxTaskItem = ({ item }: { item: SchedulableItem }) => (
-    <div
-      draggable
-      onDragStart={(e) => handleDragStart(e, item)}
-      className={`bg-gray-50 border border-gray-200 rounded-md p-2 cursor-move hover:shadow-sm transition-shadow border-l-4 ${getPriorityBorderColor(item.priority)}`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <CheckCircleIcon className="w-3 h-3 text-gray-400" />
-          <span className="text-sm font-medium text-gray-900">{item.title}</span>
+  // Component for inbox task items (simpler layout with inline editing)
+  const InboxTaskItem = ({ item }: { item: SchedulableItem }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editTitle, setEditTitle] = useState(item.title);
+    const [editDescription, setEditDescription] = useState(item.description || '');
+    const [editPriority, setEditPriority] = useState(item.priority);
+    const [editDuration, setEditDuration] = useState(item.estimatedDuration);
+    const [saving, setSaving] = useState(false);
+
+    const handleSave = async () => {
+      if (!editTitle.trim()) return;
+      
+      setSaving(true);
+      try {
+        await goalService.updateTask(item.id, {
+          title: editTitle.trim(),
+          description: editDescription.trim() || undefined,
+          priority: editPriority,
+          estimatedDuration: editDuration
+        });
+        
+        setIsEditing(false);
+        await loadSidebarData(); // Refresh to show updated data
+      } catch (error) {
+        console.error('Failed to update task:', error);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const handleCancel = () => {
+      setEditTitle(item.title);
+      setEditDescription(item.description || '');
+      setEditPriority(item.priority);
+      setEditDuration(item.estimatedDuration);
+      setIsEditing(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSave();
+      } else if (e.key === 'Escape') {
+        handleCancel();
+      }
+    };
+
+    if (isEditing) {
+      return (
+        <div className={`bg-blue-50 border border-blue-300 rounded-md p-2 border-l-4 ${getPriorityBorderColor(editPriority)}`}>
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full text-sm font-medium border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Task title..."
+              autoFocus
+            />
+            
+            <textarea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={2}
+              className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              placeholder="Description (optional)..."
+            />
+            
+            <div className="flex items-center space-x-2">
+              <select
+                value={editPriority}
+                onChange={(e) => setEditPriority(e.target.value as GoalPriority)}
+                className="text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+              
+              <input
+                type="number"
+                value={editDuration}
+                onChange={(e) => setEditDuration(parseInt(e.target.value) || 30)}
+                min="5"
+                max="480"
+                className="w-16 text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-xs text-gray-500">min</span>
+            </div>
+            
+            <div className="flex justify-end space-x-2 pt-1">
+              <button
+                onClick={handleCancel}
+                className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!editTitle.trim() || saving}
+                className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
         </div>
-        {getPriorityIcon(item.priority)}
-      </div>
-      
-      {item.description && (
-        <p className="text-xs text-gray-600 mt-1 ml-5">{item.description}</p>
-      )}
-      
-      <div className="flex items-center justify-between mt-2 ml-5 text-xs text-gray-500">
-        <span>{item.estimatedDuration}m</span>
-        {item.dueDate && (
-          <span className={
-            isOverdue(item.dueDate) ? 'text-red-600' :
-            isDueToday(item.dueDate) ? 'text-orange-600' :
-            'text-gray-500'
-          }>
-            {formatDueDate(item.dueDate)}
-          </span>
+      );
+    }
+
+    return (
+      <div
+        draggable={!isEditing}
+        onDragStart={(e) => handleDragStart(e, item)}
+        className={`bg-gray-50 border border-gray-200 rounded-md p-2 cursor-move hover:shadow-sm transition-shadow border-l-4 ${getPriorityBorderColor(item.priority)} group`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <CheckCircleIcon className="w-3 h-3 text-gray-400" />
+            <span className="text-sm font-medium text-gray-900">{item.title}</span>
+          </div>
+          <div className="flex items-center space-x-1">
+            {getPriorityIcon(item.priority)}
+            <button
+              onClick={() => setIsEditing(true)}
+              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-blue-600 transition-all"
+              title="Edit task"
+            >
+              ✏️
+            </button>
+          </div>
+        </div>
+        
+        {item.description && (
+          <p className="text-xs text-gray-600 mt-1 ml-5">{item.description}</p>
         )}
+        
+        <div className="flex items-center justify-between mt-2 ml-5 text-xs text-gray-500">
+          <span>{item.estimatedDuration}m</span>
+          {item.dueDate && (
+            <span className={
+              isOverdue(item.dueDate) ? 'text-red-600' :
+              isDueToday(item.dueDate) ? 'text-orange-600' :
+              'text-gray-500'
+            }>
+              {formatDueDate(item.dueDate)}
+            </span>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const sortSchedulableItems = (items: SchedulableItem[]): SchedulableItem[] => {
     return items.sort((a, b) => {
@@ -614,7 +736,13 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
               }}
             />
             <button
-              onClick={() => setShowCreateTaskModal(true)}
+              onClick={(e) => {
+                const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                if (input && input.value.trim()) {
+                  handleQuickAdd(input.value);
+                  input.value = '';
+                }
+              }}
               className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 shadow-sm"
               title="Add to inbox"
             >
@@ -645,7 +773,7 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
                   isRecurring: false,
                   contextId: contextId
                 })}
-                className="bg-gradient-to-br from-yellow-100 to-orange-100 border-2 border-yellow-200 rounded-xl p-3 cursor-move hover:shadow-lg transition-all group"
+                className="bg-gradient-to-br from-yellow-100 to-orange-100 border-2 border-yellow-200 rounded-xl p-3 cursor-move hover:shadow-lg transition-all group relative"
               >
                 <div className="text-2xl mb-2">☀️</div>
                 <div className="text-xs font-semibold text-gray-700">Morning Routine</div>
@@ -768,7 +896,6 @@ const IntelligentSidebar: React.FC<IntelligentSidebarProps> = ({
             </div>
           </div>
         </div>
-
       </div>
 
       {/* Quick Task Creation Modal */}

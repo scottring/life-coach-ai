@@ -225,7 +225,7 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <h1 className="text-2xl font-bold text-gray-900">Symphony AI</h1>

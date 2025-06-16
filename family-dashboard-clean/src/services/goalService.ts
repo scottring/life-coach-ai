@@ -327,7 +327,8 @@ class GoalService {
             milestoneId: task.milestoneId,
             canSchedule: true,
             isRecurring: task.isRecurring,
-            contextId: task.contextId
+            contextId: task.contextId,
+            tags: task.tags || []
           });
         });
 

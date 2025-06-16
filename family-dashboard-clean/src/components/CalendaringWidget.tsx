@@ -109,9 +109,18 @@ const CalendaringWidget: React.FC<CalendaringWidgetProps> = ({
             createdBy: userId
           };
 
-          await calendarService.createEvent(calendarEvent);
+          const createdEvent = await calendarService.createEvent(calendarEvent);
           
           console.log('Project item successfully scheduled:', projectItem.title);
+          
+          // Mark project item as scheduled
+          const projectItemScheduleEvent = new CustomEvent('projectItemScheduled', {
+            detail: { 
+              projectItemId: projectItem.id,
+              eventId: createdEvent.id 
+            }
+          });
+          window.dispatchEvent(projectItemScheduleEvent);
           
           // Refresh views
           onDataChange?.();

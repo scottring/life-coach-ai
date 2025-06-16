@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import InboxWidget from './InboxWidget';
+import ProjectListWidget from './ProjectListWidget';
 import { MagnifyingGlassIcon, Bars3Icon } from '@heroicons/react/24/outline';
 import { sopService } from '../services/sopService';
 import { SOP } from '../types/sop';
@@ -148,6 +149,13 @@ const ComposerInbox: React.FC<ComposerInboxProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Project Lists */}
+      <ProjectListWidget
+        contextId={contextId}
+        userId={userId}
+        onItemScheduled={onDataChange}
+      />
 
       {/* AI Scheduling Insights */}
       <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border border-purple-200 p-4">

@@ -7,12 +7,15 @@ import {
   ChevronDownIcon,
   ChevronRightIcon
 } from '@heroicons/react/24/outline';
+import { calendarService } from '../services/calendarService';
 
 interface ProjectItem {
   id: string;
   text: string;
   projectId: string;
   isCompleted: boolean;
+  scheduled: boolean;
+  scheduledEventId?: string;
   estimatedDuration: number;
   priority: 'low' | 'medium' | 'high';
   createdAt: Date;
@@ -33,6 +36,15 @@ interface ProjectListWidgetProps {
   compact?: boolean;
 }
 
+interface ScheduleProjectItemData {
+  id: string;
+  title: string;
+  estimatedDuration: number;
+  priority: string;
+  projectName: string;
+  projectId: string;
+}
+
 const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
   contextId,
   userId,
@@ -48,6 +60,20 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
     loadProjects();
   }, [contextId]);
 
+  useEffect(() => {
+    const handleProjectItemScheduled = (event: CustomEvent) => {
+      const { projectItemId, eventId } = event.detail;
+      console.log('ProjectListWidget received projectItemScheduled event:', { projectItemId, eventId });
+      markItemAsScheduled(projectItemId, eventId);
+    };
+
+    window.addEventListener('projectItemScheduled', handleProjectItemScheduled as EventListener);
+    
+    return () => {
+      window.removeEventListener('projectItemScheduled', handleProjectItemScheduled as EventListener);
+    };
+  }, []);
+
   const loadProjects = () => {
     // For now, load from localStorage (could be replaced with Firebase later)
     const key = `projects_${contextId}`;
@@ -59,7 +85,9 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
         createdAt: new Date(p.createdAt),
         items: p.items.map((item: any) => ({
           ...item,
-          createdAt: new Date(item.createdAt)
+          createdAt: new Date(item.createdAt),
+          scheduled: item.scheduled ?? false,
+          scheduledEventId: item.scheduledEventId
         }))
       })));
     }
@@ -109,6 +137,7 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
       text,
       projectId,
       isCompleted: false,
+      scheduled: false,
       estimatedDuration: 30,
       priority: 'medium',
       createdAt: new Date()
@@ -144,6 +173,53 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
     saveProjects(updatedProjects);
   };
 
+  const markItemAsScheduled = (itemId: string, eventId: string) => {
+    console.log('markItemAsScheduled called:', { itemId, eventId });
+    const updatedProjects = projects.map(project => ({
+      ...project,
+      items: project.items.map(item => 
+        item.id === itemId 
+          ? { ...item, scheduled: true, scheduledEventId: eventId }
+          : item
+      )
+    }));
+    console.log('Updated projects after scheduling:', updatedProjects);
+    saveProjects(updatedProjects);
+  };
+
+  const markItemAsUnscheduled = async (itemId: string) => {
+    // Find the item to get its scheduledEventId
+    let scheduledEventId: string | undefined;
+    for (const project of projects) {
+      const item = project.items.find(item => item.id === itemId);
+      if (item?.scheduledEventId) {
+        scheduledEventId = item.scheduledEventId;
+        break;
+      }
+    }
+
+    // Remove from calendar if event ID exists
+    if (scheduledEventId) {
+      try {
+        await calendarService.deleteEvent(scheduledEventId);
+      } catch (error) {
+        console.error('Error removing calendar event:', error);
+        // Continue with unscheduling even if calendar removal fails
+      }
+    }
+
+    const updatedProjects = projects.map(project => ({
+      ...project,
+      items: project.items.map(item => 
+        item.id === itemId 
+          ? { ...item, scheduled: false, scheduledEventId: undefined }
+          : item
+      )
+    }));
+    saveProjects(updatedProjects);
+    onItemScheduled?.(); // Refresh parent components
+  };
+
   const displayProjects = compact ? projects.slice(0, 2) : projects;
 
   return (
@@ -155,7 +231,7 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
             <FolderIcon className="w-5 h-5 text-gray-500" />
             <h2 className="text-lg font-semibold text-gray-900">Project Lists</h2>
             <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full">
-              {projects.reduce((total, p) => total + p.items.filter(item => !item.isCompleted).length, 0)}
+              {projects.reduce((total, p) => total + p.items.filter(item => !item.isCompleted && !item.scheduled).length, 0)}
             </span>
           </div>
           
@@ -229,7 +305,7 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
                     )}
                     <h4 className="font-medium text-gray-900">{project.name}</h4>
                     <span className="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full">
-                      {project.items.filter(item => !item.isCompleted).length}
+                      {project.items.filter(item => !item.isCompleted && !item.scheduled).length}
                     </span>
                   </button>
                   <button
@@ -271,11 +347,13 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
                           className={`flex items-center space-x-2 p-2 rounded border ${
                             item.isCompleted 
                               ? 'bg-green-50 border-green-200 opacity-60' 
+                              : item.scheduled
+                              ? 'bg-yellow-50 border-yellow-200 opacity-60'
                               : 'bg-white border-gray-200 hover:bg-gray-50 cursor-move'
                           }`}
-                          draggable={!item.isCompleted}
+                          draggable={!item.isCompleted && !item.scheduled}
                           onDragStart={(e) => {
-                            if (!item.isCompleted) {
+                            if (!item.isCompleted && !item.scheduled) {
                               e.dataTransfer.setData('application/json', JSON.stringify({
                                 type: 'project_item',
                                 data: {
@@ -293,7 +371,17 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
                           onDragEnd={(e) => {
                             e.currentTarget.style.opacity = '1';
                           }}
-                          title={!item.isCompleted ? "Drag to timeline to schedule" : ""}
+                          title={
+                            item.isCompleted ? "" :
+                            item.scheduled ? "Scheduled - click to unschedule" :
+                            "Drag to timeline to schedule"
+                          }
+                          onClick={async () => {
+                            if (item.scheduled && !item.isCompleted) {
+                              // Handle unscheduling
+                              await markItemAsUnscheduled(item.id);
+                            }
+                          }}
                         >
                           <input
                             type="checkbox"
@@ -301,12 +389,19 @@ const ProjectListWidget: React.FC<ProjectListWidgetProps> = ({
                             onChange={() => toggleItemCompletion(project.id, item.id)}
                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           />
-                          {!item.isCompleted && (
+                          {!item.isCompleted && !item.scheduled && (
                             <Bars3Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                           )}
-                          <span className={`flex-1 text-sm ${item.isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                          <span className={`flex-1 text-sm ${
+                            item.isCompleted ? 'line-through text-gray-500' : 
+                            item.scheduled ? 'line-through text-yellow-700' :
+                            'text-gray-900'
+                          }`}>
                             {item.text}
                           </span>
+                          {item.scheduled && !item.isCompleted && (
+                            <span className="text-xs text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded">Scheduled</span>
+                          )}
                           <span className="text-xs text-gray-500">{item.estimatedDuration}m</span>
                           <button
                             onClick={() => deleteItem(project.id, item.id)}

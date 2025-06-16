@@ -410,7 +410,18 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
         createdBy: userId
       };
 
-      await calendarService.createEvent(calendarEvent);
+      const createdEvent = await calendarService.createEvent(calendarEvent);
+      console.log('Created calendar event:', createdEvent);
+      
+      // Mark project item as scheduled
+      const projectItemScheduleEvent = new CustomEvent('projectItemScheduled', {
+        detail: { 
+          projectItemId: projectItem.id,
+          eventId: createdEvent.id 
+        }
+      });
+      console.log('Dispatching projectItemScheduled event:', projectItemScheduleEvent.detail);
+      window.dispatchEvent(projectItemScheduleEvent);
       
       // Refresh the view
       await loadTodaysSymphony();
@@ -633,7 +644,7 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
               </div>
             </div>
 
-            <div ref={timelineRef} className="p-6 relative min-h-96 max-h-96 overflow-y-auto">
+            <div ref={timelineRef} className="p-6 relative min-h-[600px] max-h-[600px] overflow-y-auto">
               {/* Current Time Indicator */}
               {getCurrentTimePosition() !== -1 && (
                 <div 

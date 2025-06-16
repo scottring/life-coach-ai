@@ -7,6 +7,7 @@ interface CalendaringWidgetProps {
   userId: string;
   refreshTrigger?: number;
   onDataChange?: () => void;
+  onInboxRefresh?: () => void;
 }
 
 type CalendarView = 'daily' | 'weekly';
@@ -15,7 +16,8 @@ const CalendaringWidget: React.FC<CalendaringWidgetProps> = ({
   contextId,
   userId,
   refreshTrigger,
-  onDataChange
+  onDataChange,
+  onInboxRefresh
 }) => {
   const [currentView, setCurrentView] = useState<CalendarView>('daily');
 
@@ -39,6 +41,7 @@ const CalendaringWidget: React.FC<CalendaringWidgetProps> = ({
           userId={userId}
           refreshTrigger={refreshTrigger}
           onDataChange={onDataChange}
+          onInboxRefresh={onInboxRefresh}
           showViewToggle={true}
           currentView={currentView}
           onViewChange={setCurrentView}

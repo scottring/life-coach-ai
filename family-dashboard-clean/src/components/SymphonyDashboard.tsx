@@ -48,6 +48,7 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
   const [showWidgetController, setShowWidgetController] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState<string>('universal');
   const [showDomainDropdown, setShowDomainDropdown] = useState(false);
+  const [inboxRefreshTrigger, setInboxRefreshTrigger] = useState<number>(0);
   
   // Life Domains (Orchestra Sections)
   const [lifeDomains, setLifeDomains] = useState<LifeDomain[]>([
@@ -313,6 +314,7 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
             selectedDomain={selectedDomain}
             refreshTrigger={refreshTrigger}
             onDataChange={onDataChange}
+            onInboxRefresh={() => setInboxRefreshTrigger(prev => prev + 1)}
           />
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -324,6 +326,7 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
                 widgetConfig={widgetConfig.filter(w => w.visible)}
                 lifeDomains={lifeDomains}
                 onDataChange={onDataChange}
+                onInboxRefresh={() => setInboxRefreshTrigger(prev => prev + 1)}
               />
             </div>
 
@@ -334,6 +337,7 @@ const SymphonyDashboard: React.FC<SymphonyDashboardProps> = ({
                 userId={userId}
                 lifeDomains={lifeDomains}
                 onDataChange={onDataChange}
+                refreshTrigger={inboxRefreshTrigger}
               />
             </div>
           </div>

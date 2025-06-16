@@ -12,13 +12,15 @@ interface ComposerInboxProps {
     active: boolean;
   }>;
   onDataChange?: () => void;
+  refreshTrigger?: number;
 }
 
 const ComposerInbox: React.FC<ComposerInboxProps> = ({
   contextId,
   userId,
   lifeDomains,
-  onDataChange
+  onDataChange,
+  refreshTrigger
 }) => {
   return (
     <div className="space-y-6">
@@ -27,6 +29,7 @@ const ComposerInbox: React.FC<ComposerInboxProps> = ({
         contextId={contextId}
         userId={userId}
         onItemScheduled={onDataChange}
+        refreshTrigger={refreshTrigger}
       />
 
       {/* Quick Add Actions */}

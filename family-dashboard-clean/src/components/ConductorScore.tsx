@@ -26,6 +26,7 @@ interface ConductorScoreProps {
   selectedDomain: string;
   refreshTrigger?: number;
   onDataChange?: () => void;
+  onInboxRefresh?: () => void;
 }
 
 interface SymphonyMovement {
@@ -49,7 +50,8 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
   lifeDomains,
   selectedDomain,
   refreshTrigger,
-  onDataChange
+  onDataChange,
+  onInboxRefresh
 }) => {
   const [movements, setMovements] = useState<SymphonyMovement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -322,6 +324,7 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
       // Refresh the view
       await loadTodaysSymphony();
       onDataChange?.();
+      onInboxRefresh?.();
       
     } catch (error) {
       console.error('Error scheduling item:', error);
@@ -409,6 +412,7 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
       const nextTimeSlot = `${nextSlotHour.toString().padStart(2, '0')}:${nextSlotMinute.toString().padStart(2, '0')}`;
       
       await handleScheduleItem(item, nextTimeSlot);
+      onInboxRefresh?.();
     } catch (error) {
       console.error('Error quick scheduling item:', error);
       alert('Failed to schedule item. Please try again.');
@@ -576,6 +580,7 @@ const ConductorScore: React.FC<ConductorScoreProps> = ({
                               const parsed = JSON.parse(transferData);
                               if (parsed.type === 'schedulable_item' && parsed.data) {
                                 await handleScheduleItem(parsed.data, timeSlot);
+                                onInboxRefresh?.();
                               }
                             }
                           } catch (error) {

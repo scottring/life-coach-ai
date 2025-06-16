@@ -6,6 +6,7 @@ interface WeeklyPlanningViewProps {
   userId: string;
   refreshTrigger?: number;
   onDataChange?: () => void;
+  onInboxRefresh?: () => void;
   showViewToggle?: boolean;
   currentView?: 'daily' | 'weekly';
   onViewChange?: (view: 'daily' | 'weekly') => void;
@@ -16,6 +17,7 @@ const WeeklyPlanningView: React.FC<WeeklyPlanningViewProps> = ({
   userId,
   refreshTrigger,
   onDataChange,
+  onInboxRefresh,
   showViewToggle = false,
   currentView = 'weekly',
   onViewChange
@@ -81,6 +83,7 @@ const WeeklyPlanningView: React.FC<WeeklyPlanningViewProps> = ({
           onItemScheduled={() => {
             setSidebarRefreshTrigger(prev => prev + 1);
             onDataChange?.();
+            onInboxRefresh?.();
           }}
           externalRefreshTrigger={refreshTrigger}
         />

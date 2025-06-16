@@ -25,6 +25,7 @@ interface InstrumentPanelProps {
     active: boolean;
   }>;
   onDataChange?: () => void;
+  onInboxRefresh?: () => void;
 }
 
 const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
@@ -32,7 +33,8 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
   userId,
   widgetConfig,
   lifeDomains,
-  onDataChange
+  onDataChange,
+  onInboxRefresh
 }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -75,6 +77,7 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
                   contextId={contextId}
                   userId={userId}
                   onDataChange={onDataChange}
+                  onInboxRefresh={onInboxRefresh}
                 />
               )}
               

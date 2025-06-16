@@ -8,13 +8,15 @@ interface InboxWidgetProps {
   userId: string;
   onItemScheduled?: () => void;
   compact?: boolean; // For dashboard vs full view
+  refreshTrigger?: number; // External trigger to refresh the inbox
 }
 
 const InboxWidget: React.FC<InboxWidgetProps> = ({
   contextId,
   userId,
   onItemScheduled,
-  compact = false
+  compact = false,
+  refreshTrigger
 }) => {
   const [inboxItems, setInboxItems] = useState<SchedulableItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,13 +25,19 @@ const InboxWidget: React.FC<InboxWidgetProps> = ({
 
   useEffect(() => {
     loadInboxItems();
-  }, [contextId]);
+  }, [contextId, refreshTrigger]);
 
   const loadInboxItems = async () => {
     try {
       setLoading(true);
       const tasks = await goalService.getTasksWithTag(contextId, 'inbox');
-      setInboxItems(tasks.filter(task => !task.tags?.includes('archived')));
+      setInboxItems(tasks.filter(task => {
+        // Exclude archived tasks
+        const isArchived = task.tags?.includes('archived');
+        // Exclude scheduled tasks (tasks that have both scheduledDate and scheduledTime)
+        const isScheduled = task.scheduledDate && task.scheduledTime;
+        return !isArchived && !isScheduled;
+      }));
     } catch (error) {
       console.error('Error loading inbox items:', error);
     } finally {

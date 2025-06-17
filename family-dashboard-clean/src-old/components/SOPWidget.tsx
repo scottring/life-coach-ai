@@ -23,6 +23,7 @@ interface SOPWidgetProps {
   onCreateSOP?: () => void;
   onEditSOP?: (sop: SOP) => void;
   onExecuteSOP?: (sop: SOP) => void;
+  refreshTrigger?: number;
 }
 
 const SOPWidget: React.FC<SOPWidgetProps> = ({ 
@@ -30,7 +31,8 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
   userId, 
   onCreateSOP, 
   onEditSOP, 
-  onExecuteSOP 
+  onExecuteSOP,
+  refreshTrigger 
 }) => {
   const [sops, setSOPs] = useState<SOP[]>([]);
   const [members, setMembers] = useState<ContextMember[]>([]);
@@ -43,7 +45,7 @@ const SOPWidget: React.FC<SOPWidgetProps> = ({
 
   useEffect(() => {
     loadData();
-  }, [contextId]);
+  }, [contextId, refreshTrigger]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

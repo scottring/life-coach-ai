@@ -30,7 +30,7 @@ In your chosen project, enable:
 1. Go to [APIs & Services > OAuth consent screen](https://console.cloud.google.com/apis/oauth-consent-screen)
 2. Choose "External" (unless using Google Workspace)
 3. Fill in required fields:
-   - App name: "Life Coach AI"
+   - App name: "Symphony AI"
    - User support email: Your email
    - Developer contact: Your email
 4. Add scopes:
@@ -45,7 +45,7 @@ In your chosen project, enable:
 1. Go to [APIs & Services > Credentials](https://console.cloud.google.com/apis/credentials)
 2. Click "Create Credentials" > "OAuth client ID"
 3. Choose "Web application"
-4. Name: "Life Coach AI Web Client"
+4. Name: " Coach AI Web Client"
 5. Add Authorized JavaScript origins:
    ```
    http://localhost:5173

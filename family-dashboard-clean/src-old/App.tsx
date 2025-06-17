@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './shared/hooks/useAuth';
-import { AppRouter } from './core/router/AppRouter';
-import { Context } from './shared/types/context';
-import { contextService } from './shared/services/contextService';
+import { useAuth } from './hooks/useAuth';
+import ContextSwitcher from './components/ContextSwitcher';
+import AppRouter from './components/AppRouter';
+import { Context } from './types/context';
+import { contextService } from './services/contextService';
 
 function App() {
   const { user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut, error } = useAuth();
@@ -13,6 +14,7 @@ function App() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [activeContext, setActiveContext] = useState<Context | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Demo mode for testing without authentication
   const demoUser = { id: 'demo-user', email: 'demo@example.com', name: 'Demo User' };
@@ -26,10 +28,7 @@ function App() {
           const contexts = await contextService.getContextsForUser(user.id);
           if (contexts.length === 0) {
             // Create default family context for new users
-            const defaultContext = await contextService.createDefaultFamilyContext(user.id);
-            setActiveContext(defaultContext);
-          } else {
-            setActiveContext(contexts[0]);
+            await contextService.createDefaultFamilyContext(user.id);
           }
         } catch (error) {
           console.error('Error initializing user context:', error);
@@ -40,12 +39,19 @@ function App() {
     initializeUserContext();
   }, [user, demoMode]);
 
+  const handleContextChange = (context: Context) => {
+    setActiveContext(context);
+  };
+
+  const triggerRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h1 className="text-2xl font-bold text-gray-800">Life Management</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Family Dashboard</h1>
           <p className="mt-2 text-gray-500">Loading...</p>
         </div>
       </div>
@@ -57,8 +63,8 @@ function App() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-10 shadow-lg">
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900">Life Management</h1>
-            <p className="mt-2 text-sm text-gray-600">Your personal life operating system</p>
+            <h1 className="text-3xl font-bold text-gray-900">Family Dashboard</h1>
+            <p className="mt-2 text-sm text-gray-600">Clean Firebase-powered family management</p>
           </div>
           
           <div className="mt-8 space-y-6">
@@ -215,7 +221,6 @@ function App() {
   }
 
   const currentUser = user || demoUser;
-  const currentContextId = demoMode ? demoFamilyId : activeContext?.id || '';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -224,16 +229,21 @@ function App() {
         <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="text-3xl text-blue-600 font-bold">
-                LM
+              <div className="text-5xl text-gray-800 font-serif">
+                𝄞
               </div>
               <div className="flex flex-col">
-                <h1 className="text-xl font-bold text-gray-900">Life Management</h1>
-                <p className="text-xs text-gray-500">Personal Operating System</p>
+                <h1 className="text-2xl font-bold text-gray-900">Symphony</h1>
+                <p className="text-xs text-gray-500 tracking-widest">LIFE MANAGEMENT</p>
               </div>
             </div>
-            
             <div className="flex items-center space-x-4">
+              {(user || demoMode) && (
+                <ContextSwitcher 
+                  userId={currentUser.id} 
+                  onContextChange={handleContextChange}
+                />
+              )}
               {demoMode && (
                 <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">
                   Demo Mode
@@ -266,17 +276,19 @@ function App() {
       </header>
 
       {/* Main Content */}
-      {currentContextId ? (
+      {activeContext || demoMode ? (
         <AppRouter
-          contextId={currentContextId}
+          contextId={demoMode ? demoFamilyId : activeContext?.id || ''}
           userId={currentUser.id}
+          refreshTrigger={refreshTrigger}
+          onDataChange={triggerRefresh}
         />
       ) : (
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <h3 className="text-lg font-medium text-gray-900">Setting up your workspace...</h3>
-              <p className="text-gray-500">Please wait while we initialize your account</p>
+              <h3 className="text-lg font-medium text-gray-900">Select a context to get started</h3>
+              <p className="text-gray-500">Choose from the context switcher above</p>
             </div>
           </div>
         </main>

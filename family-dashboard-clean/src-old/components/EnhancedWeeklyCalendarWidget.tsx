@@ -193,6 +193,9 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
         if (parsed.type === 'schedulable_item') {
           await handleSchedulableItemDrop(parsed.data, date, time);
           return;
+        } else if (parsed.type === 'sop_item') {
+          await handleSOPDrop(parsed.data, date, time);
+          return;
         }
       }
 
@@ -558,10 +561,10 @@ const EnhancedWeeklyCalendarWidget: React.FC<EnhancedWeeklyCalendarWidgetProps> 
     }
   };
 
-  // Time slots (5 AM to 10 PM in 15-minute intervals)
+  // Time slots (6 AM to 10 PM in 15-minute intervals)
   const generateTimeSlots = () => {
     const slots = [];
-    for (let hour = 5; hour <= 22; hour++) {
+    for (let hour = 6; hour <= 22; hour++) {
       for (let minute = 0; minute < 60; minute += 15) {
         const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         slots.push(timeString);

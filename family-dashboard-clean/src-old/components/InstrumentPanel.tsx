@@ -42,6 +42,7 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null);
   const [dragOverWidget, setDragOverWidget] = useState<string | null>(null);
   const [showCreateSOP, setShowCreateSOP] = useState(false);
+  const [sopRefreshTrigger, setSopRefreshTrigger] = useState(0);
 
   const handleDragStart = (e: React.DragEvent, widgetId: string) => {
     setDraggedWidget(widgetId);
@@ -173,6 +174,7 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
                   contextId={contextId} 
                   userId={userId}
                   onCreateSOP={() => setShowCreateSOP(true)}
+                  refreshTrigger={sopRefreshTrigger}
                 />
               )}
 
@@ -197,6 +199,7 @@ const InstrumentPanel: React.FC<InstrumentPanelProps> = ({
           userId={userId}
           onSOPUpdated={() => {
             setShowCreateSOP(false);
+            setSopRefreshTrigger(prev => prev + 1);
             onDataChange?.();
           }}
         />

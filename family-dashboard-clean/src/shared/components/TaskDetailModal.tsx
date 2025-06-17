@@ -31,10 +31,13 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [isEditingTime, setIsEditingTime] = useState(false);
+  const [isAddingSubStep, setIsAddingSubStep] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [newNote, setNewNote] = useState('');
   const [editedStartTime, setEditedStartTime] = useState('');
   const [editedEndTime, setEditedEndTime] = useState('');
+  const [newSubStepTitle, setNewSubStepTitle] = useState('');
+  const [newSubStepDescription, setNewSubStepDescription] = useState('');
 
   if (!isOpen || !event) return null;
 
@@ -160,6 +163,40 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
     setIsEditingTime(false);
     setEditedStartTime('');
     setEditedEndTime('');
+  };
+
+  const handleStartAddSubStep = () => {
+    setNewSubStepTitle('');
+    setNewSubStepDescription('');
+    setIsAddingSubStep(true);
+  };
+
+  const handleSaveSubStep = async () => {
+    if (newSubStepTitle.trim()) {
+      await taskManager.addSubStep(event.id, {
+        title: newSubStepTitle.trim(),
+        description: newSubStepDescription.trim() || undefined
+      });
+      setIsAddingSubStep(false);
+      setNewSubStepTitle('');
+      setNewSubStepDescription('');
+    }
+  };
+
+  const handleCancelSubStep = () => {
+    setIsAddingSubStep(false);
+    setNewSubStepTitle('');
+    setNewSubStepDescription('');
+  };
+
+  const handleToggleSubStep = async (subStepId: string, isCompleted: boolean) => {
+    await taskManager.updateSubStep(event.id, subStepId, { isCompleted });
+  };
+
+  const handleDeleteSubStep = async (subStepId: string) => {
+    if (window.confirm('Are you sure you want to delete this sub-step?')) {
+      await taskManager.deleteSubStep(event.id, subStepId);
+    }
   };
 
   return (
@@ -333,30 +370,91 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
             </div>
           )}
 
-          {/* SOP Steps (if applicable) */}
+          {/* SOP Sub-steps (if applicable) */}
           {event.type === 'sop' && (
             <div className="space-y-3">
-              <h3 className="text-lg font-medium text-gray-900">Steps</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">Sub-steps</h3>
+                {!isAddingSubStep && (
+                  <button 
+                    onClick={handleStartAddSubStep}
+                    className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition-colors"
+                  >
+                    + Add Sub-step
+                  </button>
+                )}
+              </div>
+              
               <div className="space-y-2">
-                {/* Mock SOP steps - in real implementation, fetch from SOP service */}
-                <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-medium">
-                    1
+                {/* Add Sub-step Form */}
+                {isAddingSubStep && (
+                  <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        placeholder="Sub-step title..."
+                        value={newSubStepTitle}
+                        onChange={(e) => setNewSubStepTitle(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                      />
+                      <textarea
+                        placeholder="Description (optional)..."
+                        value={newSubStepDescription}
+                        onChange={(e) => setNewSubStepDescription(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        rows={2}
+                      />
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={handleSaveSubStep}
+                          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                        >
+                          Add
+                        </button>
+                        <button
+                          onClick={handleCancelSubStep}
+                          className="border border-gray-300 bg-white text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Prepare workspace</p>
-                    <p className="text-xs text-gray-600">Clear desk and gather materials</p>
+                )}
+
+                {/* Existing Sub-steps */}
+                {task?.subSteps && task.subSteps.length > 0 ? (
+                  task.subSteps.map((subStep, index) => (
+                    <div key={subStep.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <input
+                        type="checkbox"
+                        checked={subStep.isCompleted}
+                        onChange={(e) => handleToggleSubStep(subStep.id, e.target.checked)}
+                        className="mt-1 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <p className={`text-sm font-medium ${subStep.isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                          {subStep.title}
+                        </p>
+                        {subStep.description && (
+                          <p className="text-xs text-gray-600 mt-1">{subStep.description}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteSubStep(subStep.id)}
+                        className="text-gray-400 hover:text-red-600 text-sm"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                ) : !isAddingSubStep ? (
+                  <div className="text-center py-4 text-gray-500">
+                    <p className="text-sm">No sub-steps added yet</p>
+                    <p className="text-xs text-gray-400">Click "Add Sub-step" to break this task into smaller steps</p>
                   </div>
-                </div>
-                <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-medium">
-                    2
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Review objectives</p>
-                    <p className="text-xs text-gray-600">Check goals and requirements</p>
-                  </div>
-                </div>
+                ) : null}
               </div>
             </div>
           )}

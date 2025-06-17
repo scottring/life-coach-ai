@@ -40,6 +40,15 @@ export interface UniversalTask {
   confidence?: number;
   source: 'manual' | 'ai_capture' | 'import';
   
+  // Sub-steps for SOP tasks
+  subSteps?: {
+    id: string;
+    title: string;
+    description?: string;
+    isCompleted: boolean;
+    isOptional: boolean;
+  }[];
+  
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -367,6 +376,50 @@ class TaskManagerService {
   // Get task by ID
   getTask(taskId: string): UniversalTask | undefined {
     return this.tasks.find(task => task.id === taskId);
+  }
+
+  // Add sub-step to task
+  async addSubStep(taskId: string, subStepData: { title: string; description?: string; isOptional?: boolean }): Promise<void> {
+    const task = this.getTask(taskId);
+    if (!task) return;
+
+    const newSubStep = {
+      id: `substep_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      title: subStepData.title,
+      description: subStepData.description || '',
+      isCompleted: false,
+      isOptional: subStepData.isOptional || false
+    };
+
+    const existingSubSteps = task.subSteps || [];
+    await this.updateTask(taskId, {
+      subSteps: [...existingSubSteps, newSubStep]
+    });
+  }
+
+  // Update sub-step
+  async updateSubStep(taskId: string, subStepId: string, updates: { title?: string; description?: string; isCompleted?: boolean; isOptional?: boolean }): Promise<void> {
+    const task = this.getTask(taskId);
+    if (!task?.subSteps) return;
+
+    const updatedSubSteps = task.subSteps.map(subStep => 
+      subStep.id === subStepId ? { ...subStep, ...updates } : subStep
+    );
+
+    await this.updateTask(taskId, {
+      subSteps: updatedSubSteps
+    });
+  }
+
+  // Delete sub-step
+  async deleteSubStep(taskId: string, subStepId: string): Promise<void> {
+    const task = this.getTask(taskId);
+    if (!task?.subSteps) return;
+
+    const updatedSubSteps = task.subSteps.filter(subStep => subStep.id !== subStepId);
+    await this.updateTask(taskId, {
+      subSteps: updatedSubSteps
+    });
   }
 
   // Create a single task directly

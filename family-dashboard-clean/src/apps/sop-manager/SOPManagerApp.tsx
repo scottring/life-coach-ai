@@ -25,6 +25,7 @@ export const SOPManagerApp: React.FC<SOPManagerAppProps> = ({
   const [sops, setSOPs] = useState<SOP[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingSOP, setEditingSOP] = useState<SOP | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const loadSOPs = useCallback(async () => {
@@ -51,6 +52,7 @@ export const SOPManagerApp: React.FC<SOPManagerAppProps> = ({
 
   const handleSOPCreated = () => {
     setShowCreateModal(false);
+    setEditingSOP(null);
     setRefreshTrigger(prev => prev + 1);
   };
 
@@ -153,6 +155,10 @@ export const SOPManagerApp: React.FC<SOPManagerAppProps> = ({
             contextId={contextId}
             userId={userId}
             onSOPUpdated={() => setRefreshTrigger(prev => prev + 1)}
+            onSOPEdit={(sop) => {
+              setEditingSOP(sop);
+              setShowCreateModal(true);
+            }}
           />
         </div>
 
@@ -168,14 +174,18 @@ export const SOPManagerApp: React.FC<SOPManagerAppProps> = ({
         </div>
       </div>
 
-      {/* Create SOP Modal */}
+      {/* Create/Edit SOP Modal */}
       {showCreateModal && (
         <CreateSOPModal
           isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => {
+            setShowCreateModal(false);
+            setEditingSOP(null);
+          }}
           contextId={contextId}
           userId={userId}
           onSOPCreated={handleSOPCreated}
+          editingSOP={editingSOP}
         />
       )}
     </div>

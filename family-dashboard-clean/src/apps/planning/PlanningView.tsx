@@ -16,6 +16,7 @@ import {
 import { TaskDetailModal } from '../../shared/components/TaskDetailModal';
 import { SOPTooltip } from '../../shared/components/SOPTooltip';
 import { taskManager, UniversalTask } from '../../shared/services/taskManagerService';
+import { sopService } from '../../shared/services/sopService';
 import './planning-calendar.css';
 
 interface PlanningViewProps {
@@ -97,8 +98,10 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
   useEffect(() => {
     const loadPlanningData = () => {
       try {
+        console.log(`🔍 Loading planning data for contextId: ${contextId}`);
         // Get unscheduled tasks
         const unscheduledTasks = taskManager.getUnscheduledTasks(contextId);
+        console.log(`🚀 Got ${unscheduledTasks.length} unscheduled tasks from taskManager`);
         const unscheduledItems: SchedulableItem[] = unscheduledTasks.map(task => ({
           id: task.id,
           title: task.title,
@@ -157,10 +160,18 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
       }
     };
 
-    // Load tasks initially and set up real-time subscription
-    taskManager.loadTasks(contextId).then(() => {
-      loadPlanningData();
-    });
+    // Load tasks initially and set up real-time subscription with retry
+    const loadWithRetry = async () => {
+      try {
+        await taskManager.loadTasks(contextId);
+        loadPlanningData();
+      } catch (error) {
+        console.log('⏳ Retrying task load in 2 seconds...');
+        setTimeout(loadWithRetry, 2000);
+      }
+    };
+    
+    loadWithRetry();
 
     // Subscribe to real-time updates
     const unsubscribeFirestore = taskManager.subscribeToTasks(contextId);
@@ -226,8 +237,29 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
       
       console.log('Scheduling task:', taskId, 'for', dropDate, 'at', dropTime);
       
-      // Schedule the task
-      await taskManager.scheduleTask(taskId, dropDate, dropTime);
+      // Wait a moment for task to sync, then schedule
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      const trySchedule = async () => {
+        try {
+          await taskManager.scheduleTask(taskId, dropDate, dropTime);
+          // Let React handle DOM updates instead of manually removing
+          console.log('✅ Task scheduled, React will update DOM');
+          return true;
+        } catch (error) {
+          attempts++;
+          if (attempts < maxAttempts) {
+            console.log(`⏳ Scheduling attempt ${attempts}, retrying in 500ms...`);
+            setTimeout(trySchedule, 500);
+          } else {
+            console.error('Failed to schedule task after', maxAttempts, 'attempts');
+            throw error;
+          }
+        }
+      };
+      
+      await trySchedule();
       
       console.log('✅ Task scheduled successfully');
     } catch (error) {
@@ -235,12 +267,79 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
     }
   };
 
-  const handleUnscheduleTask = async (taskId: string) => {
+  const handleRemoveTask = async (taskId: string) => {
     try {
-      await taskManager.unscheduleTask(taskId);
-      console.log('✅ Task unscheduled successfully');
+      await taskManager.deleteTask(taskId);
+      console.log('✅ Task removed successfully');
     } catch (error) {
-      console.error('Error unscheduling task:', error);
+      console.error('Error removing task:', error);
+    }
+  };
+
+  const handleImportSOPSteps = async () => {
+    try {
+      console.log(`🔄 Starting SOP import for contextId: ${contextId}`);
+      // Get all SOPs for the context
+      const sops = await sopService.getSOPsForContext(contextId);
+      
+      if (sops.length === 0) {
+        alert('No SOPs found to import steps from.');
+        return;
+      }
+
+      // Show selection dialog
+      const sopNames = sops.map(sop => `${sop.name} (${sop.steps?.length || 0} steps)`);
+      const selectedIndex = window.prompt(
+        `Select SOP to import steps from:\n${sopNames.map((name, i) => `${i + 1}. ${name}`).join('\n')}\n\nEnter number (1-${sops.length}):`
+      );
+
+      if (!selectedIndex || isNaN(Number(selectedIndex))) return;
+      
+      const sopIndex = Number(selectedIndex) - 1;
+      if (sopIndex < 0 || sopIndex >= sops.length) return;
+
+      const selectedSOP = sops[sopIndex];
+      if (!selectedSOP.steps || selectedSOP.steps.length === 0) {
+        alert('Selected SOP has no steps to import.');
+        return;
+      }
+
+      // Create tasks for each step
+      for (const step of selectedSOP.steps) {
+        const taskData = {
+          id: `sop_${Math.random().toString(36).substr(2, 8)}`,
+          title: step.title,
+          description: step.description,
+          type: 'sop' as const,
+          status: 'pending' as const,
+          priority: 'medium' as const,
+          contextId: contextId,
+          context: contextId as any,
+          duration: step.estimatedDuration || 30,
+          assignedTo: selectedSOP.defaultAssignee,
+          createdBy: selectedSOP.createdBy,
+          source: 'import' as const,
+          parentId: selectedSOP.id,
+          parentTitle: selectedSOP.name
+        };
+
+        await taskManager.createTask(taskData);
+      }
+
+      console.log(`✅ Imported ${selectedSOP.steps.length} steps from SOP: ${selectedSOP.name}`);
+      console.log(`📋 Tasks created with contextId: ${contextId}`);
+      
+      // Debug: Check tasks immediately after import
+      setTimeout(() => {
+        console.log('🔍 Checking unscheduled tasks immediately after import...');
+        const unscheduledTasks = taskManager.getUnscheduledTasks(contextId);
+        console.log('📋 Unscheduled tasks after import:', unscheduledTasks.length);
+      }, 100);
+      
+      alert(`Successfully imported ${selectedSOP.steps.length} tasks from "${selectedSOP.name}"`);
+    } catch (error) {
+      console.error('Error importing SOP steps:', error);
+      alert('Failed to import SOP steps. Please try again.');
     }
   };
 
@@ -275,8 +374,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
 
   const getDisplayName = (assignedTo?: string) => {
     if (!assignedTo) return null;
-    // If it looks like a Firebase UID (long alphanumeric string), hide it
-    if (assignedTo.length > 20 && /^[a-zA-Z0-9]+$/.test(assignedTo)) {
+    // If it looks like a Firebase UID or system ID, hide it
+    if (assignedTo.length > 15 || /^[a-zA-Z0-9_-]{10,}$/.test(assignedTo) || assignedTo.includes('demo-') || assignedTo.includes('user-')) {
       return null;
     }
     return assignedTo;
@@ -326,11 +425,20 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
         <div className="lg:col-span-1">
           <div className="bg-white border border-gray-200 rounded-lg">
             <div className="p-4 border-b border-gray-200">
-              <h3 className="font-medium text-gray-900 flex items-center">
-                <UserGroupIcon className="w-5 h-5 mr-2" />
-                Unscheduled Items
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">Drag to schedule</p>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-medium text-gray-900 flex items-center">
+                  <UserGroupIcon className="w-5 h-5 mr-2" />
+                  Unscheduled Items
+                </h3>
+                <button
+                  onClick={handleImportSOPSteps}
+                  className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+                  title="Import SOP steps as tasks"
+                >
+                  + SOP
+                </button>
+              </div>
+              <p className="text-sm text-gray-500">Drag to schedule</p>
             </div>
             
             <div id="unscheduled-container" className="p-4 space-y-3 max-h-96 overflow-y-auto">
@@ -348,10 +456,10 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2 mb-1">
                         <span className="text-lg">{getTypeIcon(item.type)}</span>
-                        <h4 className="font-medium text-gray-900 text-sm truncate">{item.title}</h4>
+                        <h4 className="font-medium text-gray-900 text-sm truncate max-w-full">{item.title}</h4>
                       </div>
-                      {item.parentTitle && (
-                        <p className="text-xs text-gray-500 mb-2">{item.parentTitle}</p>
+                      {item.parentTitle && getDisplayName(item.parentTitle) && (
+                        <p className="text-xs text-gray-500 mb-2">{getDisplayName(item.parentTitle)}</p>
                       )}
                       
                       <div className="flex items-center space-x-3 text-xs text-gray-600">
@@ -379,9 +487,9 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
                     </div>
                     
                     <button
-                      onClick={() => handleUnscheduleTask(item.id)}
+                      onClick={() => handleRemoveTask(item.id)}
                       className="text-gray-400 hover:text-gray-600 text-xs"
-                      title="Remove from unscheduled"
+                      title="Remove task"
                     >
                       ×
                     </button>
@@ -413,7 +521,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
               }}
               initialView={currentView}
               viewDidMount={(info) => setCurrentView(info.view.type)}
-              height="auto"
+              height={600}
               events={calendarEvents}
               editable={true}
               selectable={true}
@@ -431,6 +539,20 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
               snapDuration="00:15:00"
               allDaySlot={false}
               nowIndicator={true}
+              scrollTime={(() => {
+                const now = new Date();
+                const hours = now.getHours().toString().padStart(2, '0');
+                const minutes = now.getMinutes().toString().padStart(2, '0');
+                return `${hours}:${minutes}:00`;
+              })()}
+              dayHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric' }}
+              slotLabelFormat={{
+                hour: 'numeric',
+                minute: '2-digit',
+                omitZeroMinute: false,
+                meridiem: 'short'
+              }}
+              expandRows={true}
               eventClick={handleEventClick}
               select={handleDateSelect}
               eventDrop={handleEventDrop}

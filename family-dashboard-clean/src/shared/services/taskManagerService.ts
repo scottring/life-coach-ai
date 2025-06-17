@@ -54,11 +54,43 @@ class TaskManagerService {
   private listeners: Set<() => void> = new Set();
   private unsubscribes: Map<string, () => void> = new Map();
   private readonly COLLECTION_NAME = 'tasks';
+  private readonly STORAGE_KEY = 'symphony_tasks';
   private authInitialized = false;
 
   constructor() {
+    // Load tasks from localStorage first
+    this.loadFromLocalStorage();
     // Start authentication initialization but don't block constructor
     this.initializeAuth().catch(console.error);
+  }
+
+  private loadFromLocalStorage(): void {
+    try {
+      const stored = localStorage.getItem(this.STORAGE_KEY);
+      if (stored) {
+        const tasks = JSON.parse(stored);
+        // Convert date strings back to Date objects
+        this.tasks = tasks.map((task: any) => ({
+          ...task,
+          createdAt: new Date(task.createdAt),
+          updatedAt: new Date(task.updatedAt),
+          scheduledDate: task.scheduledDate ? new Date(task.scheduledDate) : undefined,
+          completedAt: task.completedAt ? new Date(task.completedAt) : undefined
+        }));
+        console.log(`📱 Loaded ${this.tasks.length} tasks from localStorage`);
+      }
+    } catch (error) {
+      console.error('Error loading from localStorage:', error);
+    }
+  }
+
+  private saveToLocalStorage(): void {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.tasks));
+      console.log(`💾 Saved ${this.tasks.length} tasks to localStorage`);
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
   }
 
   private async initializeAuth(): Promise<void> {
@@ -102,6 +134,8 @@ class TaskManagerService {
 
   private notifyListeners() {
     this.listeners.forEach(callback => callback());
+    // Save to localStorage whenever tasks change
+    this.saveToLocalStorage();
   }
 
   // Add tasks from AI capture
@@ -217,11 +251,13 @@ class TaskManagerService {
 
   // Get unscheduled tasks for planning view
   getUnscheduledTasks(contextId: string): UniversalTask[] {
-    return this.tasks.filter(task => 
+    const unscheduled = this.tasks.filter(task => 
       task.contextId === contextId && 
       !task.scheduledDate && 
       task.status === 'pending'
     );
+    console.log(`📋 Found ${unscheduled.length} unscheduled tasks for context ${contextId}`);
+    return unscheduled;
   }
 
   // Get scheduled tasks for planning view (calendar events)
@@ -244,8 +280,8 @@ class TaskManagerService {
       // Find task by ID in local cache to get docId
       const task = this.tasks.find(t => t.id === taskId);
       if (!task?.docId) {
-        console.error('Task not found or missing docId:', taskId);
-        return;
+        console.warn('Task not in Firestore, updating locally only:', taskId);
+        return this.updateTaskLocal(taskId, updates);
       }
 
       const updateData: any = {
@@ -388,7 +424,7 @@ class TaskManagerService {
       console.error('Firebase error details:', error);
       
       // Fallback to in-memory storage if Firestore fails
-      console.warn('Falling back to in-memory storage due to Firestore error');
+      console.warn('🔴 Falling back to in-memory storage due to Firestore error');
       const newTask: UniversalTask = {
         ...taskData,
         createdAt: new Date(),
@@ -396,7 +432,8 @@ class TaskManagerService {
       };
       this.tasks.push(newTask);
       this.notifyListeners();
-      console.log('Task created in memory as fallback:', newTask);
+      console.log('✅ Task created in memory as fallback:', newTask);
+      console.log('📊 Total tasks in cache after creation:', this.tasks.length);
       return newTask;
     }
   }
@@ -497,11 +534,26 @@ class TaskManagerService {
         tasks.push(task);
       });
 
-      // Update local cache
-      this.tasks = this.tasks.filter(t => t.contextId !== contextId).concat(tasks);
-      this.notifyListeners();
+      // Update local cache - if we get tasks from Firestore, use those
+      // If Firestore is empty but auth is working, clear local tasks for this context
+      // If Firestore fails, keep existing tasks
+      const existingTasksForContext = this.tasks.filter(t => t.contextId === contextId);
+      
+      if (tasks.length > 0) {
+        // Got real data from Firestore, replace local tasks
+        this.tasks = this.tasks.filter(t => t.contextId !== contextId).concat(tasks);
+        console.log(`📥 Loaded ${tasks.length} tasks from Firestore`);
+        this.notifyListeners();
+      } else if (existingTasksForContext.length === 0) {
+        // No tasks in local cache and none in Firestore - this is fine
+        console.log('📋 No tasks found locally or in Firestore');
+      } else {
+        // We have local tasks but Firestore returned empty - keep local tasks
+        console.log(`📋 Keeping ${existingTasksForContext.length} local tasks, Firestore was empty`);
+      }
     } catch (error) {
       console.error('Error loading tasks:', error);
+      // Don't clear local tasks on error
     }
   }
 }

@@ -17,6 +17,7 @@ interface SOPListProps {
   contextId: string;
   userId: string;
   onSOPUpdated: () => void;
+  onSOPEdit: (sop: SOP) => void;
 }
 
 const categories: { value: SOPCategory | 'all'; label: string; icon: string }[] = [
@@ -34,7 +35,8 @@ export const SOPList: React.FC<SOPListProps> = ({
   sops, 
   contextId, 
   userId, 
-  onSOPUpdated 
+  onSOPUpdated,
+  onSOPEdit
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<SOPCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,8 +108,7 @@ export const SOPList: React.FC<SOPListProps> = ({
 
   const handleEdit = (sop: SOP) => {
     console.log('Edit SOP:', sop.name);
-    // TODO: Implement SOP editing modal
-    alert('SOP editing coming soon!');
+    onSOPEdit(sop);
   };
 
   const handleDelete = async (sop: SOP) => {

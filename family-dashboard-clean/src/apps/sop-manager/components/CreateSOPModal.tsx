@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { XMarkIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { sopService } from '../../../shared/services/sopService';
-import { SOPCategory, SOPDifficulty, SOPStep } from '../../../shared/types/sop';
+import { SOP, SOPCategory, SOPDifficulty, SOPStep } from '../../../shared/types/sop';
 
 interface CreateSOPModalProps {
   isOpen: boolean;
@@ -9,6 +9,7 @@ interface CreateSOPModalProps {
   contextId: string;
   userId: string;
   onSOPCreated: () => void;
+  editingSOP?: SOP | null;
 }
 
 interface FormData {
@@ -46,7 +47,8 @@ export const CreateSOPModal: React.FC<CreateSOPModalProps> = ({
   onClose,
   contextId,
   userId,
-  onSOPCreated
+  onSOPCreated,
+  editingSOP
 }) => {
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -72,6 +74,39 @@ export const CreateSOPModal: React.FC<CreateSOPModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Populate form when editing
+  useEffect(() => {
+    if (editingSOP) {
+      setFormData({
+        name: editingSOP.name,
+        description: editingSOP.description || '',
+        category: editingSOP.category,
+        difficulty: editingSOP.difficulty,
+        tags: editingSOP.tags || [],
+        steps: editingSOP.steps?.map(step => ({
+          stepNumber: step.stepNumber,
+          title: step.title,
+          description: step.description || '',
+          estimatedDuration: step.estimatedDuration,
+          isOptional: step.isOptional,
+          type: step.type
+        })) || [{
+          stepNumber: 1,
+          title: '',
+          description: '',
+          estimatedDuration: 5,
+          isOptional: false,
+          type: 'standard'
+        }],
+        assignableMembers: editingSOP.assignableMembers || [],
+        defaultAssignee: editingSOP.defaultAssignee,
+        requiresConfirmation: editingSOP.requiresConfirmation || false,
+        canBeEmbedded: editingSOP.canBeEmbedded || true,
+        isRecurring: editingSOP.isRecurring || false
+      });
+    }
+  }, [editingSOP]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,19 +124,34 @@ export const CreateSOPModal: React.FC<CreateSOPModalProps> = ({
     setError('');
 
     try {
-      await sopService.createSOP(contextId, {
-        contextId,
-        ...formData,
-        createdBy: userId,
-        status: 'active',
-        isStandalone: true,
-        executionOrder: 'sequential'
-      });
+      if (editingSOP) {
+        // Update existing SOP - preserve existing step IDs
+        const stepsWithIds = formData.steps.map((step, index) => ({
+          ...step,
+          id: editingSOP.steps?.[index]?.id || `step_${Date.now()}_${index}`
+        }));
+        
+        await sopService.updateSOP(editingSOP.id, {
+          ...formData,
+          steps: stepsWithIds,
+          updatedAt: new Date()
+        });
+      } else {
+        // Create new SOP
+        await sopService.createSOP(contextId, {
+          contextId,
+          ...formData,
+          createdBy: userId,
+          status: 'active',
+          isStandalone: true,
+          executionOrder: 'sequential'
+        });
+      }
       onSOPCreated();
       onClose();
     } catch (err) {
-      console.error('Error creating SOP:', err);
-      setError('Failed to create SOP. Please try again.');
+      console.error(editingSOP ? 'Error updating SOP:' : 'Error creating SOP:', err);
+      setError(editingSOP ? 'Failed to update SOP. Please try again.' : 'Failed to create SOP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -162,7 +212,9 @@ export const CreateSOPModal: React.FC<CreateSOPModalProps> = ({
         <form onSubmit={handleSubmit}>
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Create New SOP</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {editingSOP ? 'Edit SOP' : 'Create New SOP'}
+            </h3>
             <button
               type="button"
               onClick={onClose}

@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { SOP, SOPCategory } from '../../../shared/types/sop';
 import { sopService } from '../../../shared/services/sopService';
+import { taskManager } from '../../../shared/services/taskManagerService';
 
 interface SOPListProps {
   sops: SOP[];
@@ -64,14 +65,49 @@ export const SOPList: React.FC<SOPListProps> = ({
     }
   };
 
-  const handleExecute = (sop: SOP) => {
-    console.log('Execute SOP:', sop.name);
-    // TODO: Implement SOP execution flow
+  const handleExecute = async (sop: SOP) => {
+    console.log('Executing SOP:', sop);
+    console.log('Context ID:', contextId);
+    console.log('User ID:', userId);
+    
+    try {
+      // Create a task for this SOP execution
+      const sopTask = {
+        id: `sop_task_${sop.id}_${Date.now()}`,
+        title: `Execute: ${sop.name}`,
+        type: 'sop' as const,
+        context: 'family' as const, // You might want to make this dynamic
+        priority: 'medium' as const,
+        status: 'pending' as const,
+        duration: sop.estimatedDuration,
+        assignedTo: sop.defaultAssignee || userId,
+        createdBy: userId,
+        contextId,
+        tags: [...sop.tags, 'sop-execution'],
+        notes: `SOP ID: ${sop.id}\n\nSteps:\n${sop.steps.map((step, i) => `${i + 1}. ${step.title} (${step.estimatedDuration}min)`).join('\n')}`,
+        source: 'manual' as const
+      };
+
+      // Create task using the new direct method
+      const createdTask = await taskManager.createTask(sopTask);
+      
+      if (createdTask) {
+        console.log(`✅ SOP "${sop.name}" added to your task list!`);
+        alert(`✅ SOP "${sop.name}" has been added to your tasks! Check the Today or Planning view to schedule it.`);
+      } else {
+        throw new Error('Failed to create task');
+      }
+    } catch (error) {
+      console.error('Error creating SOP task:', error);
+      console.error('Error details:', error);
+      alert(`❌ Failed to create SOP task. Error: ${error instanceof Error ? error.message : 'Unknown error'}. Check console for details.`);
+    }
   };
 
   const handleEdit = (sop: SOP) => {
     console.log('Edit SOP:', sop.name);
-    // TODO: Implement SOP editing
+    // TODO: Implement SOP editing modal
+    alert('SOP editing coming soon!');
   };
 
   const handleDelete = async (sop: SOP) => {
@@ -210,7 +246,8 @@ export const SOPList: React.FC<SOPListProps> = ({
                 <div className="flex items-center space-x-2 ml-6">
                   <div 
                     className="p-2 text-gray-400 hover:text-gray-600 cursor-move"
-                    title="Drag to schedule"
+                    title="Drag to schedule (coming soon)"
+                    onClick={() => alert('Drag-and-drop scheduling coming soon! Use Execute button to add to tasks.')}
                   >
                     <Bars3Icon className="w-5 h-5" />
                   </div>

@@ -9,6 +9,7 @@ import {
 import { SOPList } from './components/SOPList';
 import { CreateSOPModal } from './components/CreateSOPModal';
 import { ConnectedApps } from './components/ConnectedApps';
+import { SOPStats } from './components/SOPStats';
 import { SOP } from '../../shared/types/sop';
 import { sopService } from '../../shared/services/sopService';
 
@@ -155,8 +156,14 @@ export const SOPManagerApp: React.FC<SOPManagerAppProps> = ({
           />
         </div>
 
-        {/* Connected Apps Sidebar (1 column) */}
-        <div className="lg:col-span-1">
+        {/* Sidebar (1 column) */}
+        <div className="lg:col-span-1 space-y-6">
+          <SOPStats 
+            sops={sops}
+            contextId={contextId}
+            userId={userId}
+            onSOPsUpdated={() => setRefreshTrigger(prev => prev + 1)}
+          />
           <ConnectedApps contextId={contextId} userId={userId} />
         </div>
       </div>

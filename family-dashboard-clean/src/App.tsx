@@ -45,7 +45,7 @@ function App() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h1 className="text-2xl font-bold text-gray-800">Life Management</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Symphony</h1>
           <p className="mt-2 text-gray-500">Loading...</p>
         </div>
       </div>
@@ -57,7 +57,7 @@ function App() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-10 shadow-lg">
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900">Life Management</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Symphony</h1>
             <p className="mt-2 text-sm text-gray-600">Your personal life operating system</p>
           </div>
           
@@ -224,11 +224,13 @@ function App() {
         <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="text-3xl text-blue-600 font-bold">
-                LM
-              </div>
+              <img 
+                src="/color-tree.jpg" 
+                alt="Symphony Logo" 
+                className="w-12 h-12 rounded-lg object-cover"
+              />
               <div className="flex flex-col">
-                <h1 className="text-xl font-bold text-gray-900">Life Management</h1>
+                <h1 className="text-xl font-bold text-gray-900">Symphony</h1>
                 <p className="text-xs text-gray-500">Personal Operating System</p>
               </div>
             </div>

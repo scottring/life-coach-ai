@@ -111,7 +111,9 @@ export const sopService = {
   // Create a new SOP
   async createSOP(
     contextId: string,
-    sopData: Omit<SOP, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'estimatedDuration'>
+    sopData: Omit<SOP, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'estimatedDuration' | 'steps'> & {
+      steps: Omit<SOPStep, 'id'>[]
+    }
   ): Promise<SOP> {
     // Generate IDs for steps and ensure they have the type property
     const stepsWithIds = sopData.steps.map(step => ({

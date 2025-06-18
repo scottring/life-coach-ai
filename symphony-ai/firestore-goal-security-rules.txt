@@ -1,0 +1,204 @@
+// Firestore Security Rules for Goal Tracking System
+// Add these rules to your firestore.rules file
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserId() {
+      return request.auth.uid;
+    }
+    
+    function isContextMember(contextId) {
+      return exists(/databases/$(database)/documents/context_members/$(contextId + '_' + getUserId()));
+    }
+    
+    function isContextAdmin(contextId) {
+      let memberDoc = get(/databases/$(database)/documents/context_members/$(contextId + '_' + getUserId()));
+      return memberDoc.data.role == 'admin';
+    }
+    
+    function canAccessContext(contextId) {
+      return isContextMember(contextId) || isContextAdmin(contextId);
+    }
+    
+    function isAssignedMember(assignedMembers) {
+      return getUserId() in assignedMembers;
+    }
+    
+    function isCreator(createdBy) {
+      return getUserId() == createdBy;
+    }
+    
+    function isGoalVisible(goalData) {
+      return goalData.isPublic || 
+             isAssignedMember(goalData.assignedMembers) || 
+             isCreator(goalData.createdBy);
+    }
+    
+    // Goals Collection
+    match /goals/{goalId} {
+      allow read: if isAuthenticated() && 
+                     canAccessContext(resource.data.contextId) &&
+                     isGoalVisible(resource.data);
+      
+      allow create: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       getUserId() == resource.data.createdBy &&
+                       resource.data.contextId is string &&
+                       resource.data.title is string &&
+                       resource.data.status in ['not_started', 'in_progress', 'completed', 'on_hold', 'cancelled'] &&
+                       resource.data.priority in ['low', 'medium', 'high', 'critical'] &&
+                       resource.data.category in ['personal', 'family', 'work', 'health', 'financial', 'education', 'other'];
+      
+      allow update: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       (isCreator(resource.data.createdBy) || 
+                        isAssignedMember(resource.data.assignedMembers) ||
+                        isContextAdmin(resource.data.contextId)) &&
+                       request.data.contextId == resource.data.contextId &&
+                       request.data.createdBy == resource.data.createdBy;
+      
+      allow delete: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       (isCreator(resource.data.createdBy) || 
+                        isContextAdmin(resource.data.contextId));
+    }
+    
+    // Projects Collection
+    match /projects/{projectId} {
+      allow read: if isAuthenticated() && 
+                     canAccessContext(resource.data.contextId);
+      
+      allow create: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       getUserId() == resource.data.createdBy &&
+                       resource.data.contextId is string &&
+                       resource.data.title is string &&
+                       resource.data.status in ['planning', 'active', 'on_hold', 'completed', 'cancelled'] &&
+                       resource.data.priority in ['low', 'medium', 'high', 'critical'] &&
+                       resource.data.category in ['personal', 'family', 'work', 'health', 'financial', 'education', 'other'];
+      
+      allow update: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       (isCreator(resource.data.createdBy) || 
+                        isAssignedMember(resource.data.assignedMembers) ||
+                        isContextAdmin(resource.data.contextId)) &&
+                       request.data.contextId == resource.data.contextId &&
+                       request.data.createdBy == resource.data.createdBy;
+      
+      allow delete: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       (isCreator(resource.data.createdBy) || 
+                        isContextAdmin(resource.data.contextId));
+    }
+    
+    // Milestones Collection
+    match /milestones/{milestoneId} {
+      allow read: if isAuthenticated() && 
+                     canAccessContext(resource.data.contextId);
+      
+      allow create: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       resource.data.contextId is string &&
+                       resource.data.title is string &&
+                       resource.data.status in ['pending', 'in_progress', 'completed', 'overdue'] &&
+                       resource.data.goalId is string;
+      
+      allow update: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       request.data.contextId == resource.data.contextId &&
+                       request.data.goalId == resource.data.goalId;
+      
+      allow delete: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId);
+    }
+    
+    // Goal Tasks Collection
+    match /goal_tasks/{taskId} {
+      allow read: if isAuthenticated() && 
+                     canAccessContext(resource.data.contextId);
+      
+      allow create: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       resource.data.contextId is string &&
+                       resource.data.title is string &&
+                       resource.data.status in ['pending', 'in_progress', 'completed', 'cancelled'] &&
+                       resource.data.priority in ['low', 'medium', 'high', 'critical'] &&
+                       resource.data.goalId is string &&
+                       resource.data.estimatedDuration is number &&
+                       resource.data.estimatedDuration > 0;
+      
+      allow update: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       (request.data.assignedTo == null || 
+                        request.data.assignedTo == getUserId() || 
+                        isContextAdmin(resource.data.contextId)) &&
+                       request.data.contextId == resource.data.contextId &&
+                       request.data.goalId == resource.data.goalId;
+      
+      allow delete: if isAuthenticated() && 
+                       canAccessContext(resource.data.contextId) &&
+                       (resource.data.assignedTo == getUserId() || 
+                        isContextAdmin(resource.data.contextId));
+    }
+    
+    // Goal Progress Tracking (subcollection under goals)
+    match /goals/{goalId}/progress/{progressId} {
+      allow read, write: if isAuthenticated() && 
+                            canAccessContext(get(/databases/$(database)/documents/goals/$(goalId)).data.contextId);
+    }
+    
+    // Project Progress Tracking (subcollection under projects)
+    match /projects/{projectId}/progress/{progressId} {
+      allow read, write: if isAuthenticated() && 
+                            canAccessContext(get(/databases/$(database)/documents/projects/$(projectId)).data.contextId);
+    }
+    
+    // Task Dependencies (subcollection under goal_tasks)
+    match /goal_tasks/{taskId}/dependencies/{dependencyId} {
+      allow read, write: if isAuthenticated() && 
+                            canAccessContext(get(/databases/$(database)/documents/goal_tasks/$(taskId)).data.contextId);
+    }
+    
+    // Goal Comments/Notes (subcollection under goals)
+    match /goals/{goalId}/comments/{commentId} {
+      allow read: if isAuthenticated() && 
+                     canAccessContext(get(/databases/$(database)/documents/goals/$(goalId)).data.contextId);
+      
+      allow create: if isAuthenticated() && 
+                       canAccessContext(get(/databases/$(database)/documents/goals/$(goalId)).data.contextId) &&
+                       getUserId() == resource.data.createdBy;
+      
+      allow update, delete: if isAuthenticated() && 
+                               getUserId() == resource.data.createdBy;
+    }
+    
+    // Project Comments/Notes (subcollection under projects)
+    match /projects/{projectId}/comments/{commentId} {
+      allow read: if isAuthenticated() && 
+                     canAccessContext(get(/databases/$(database)/documents/projects/$(projectId)).data.contextId);
+      
+      allow create: if isAuthenticated() && 
+                       canAccessContext(get(/databases/$(database)/documents/projects/$(projectId)).data.contextId) &&
+                       getUserId() == resource.data.createdBy;
+      
+      allow update, delete: if isAuthenticated() && 
+                               getUserId() == resource.data.createdBy;
+    }
+    
+    // Goal Metrics and Analytics (read-only aggregations)
+    match /goal_metrics/{metricId} {
+      allow read: if isAuthenticated() && 
+                     canAccessContext(resource.data.contextId);
+      
+      // Only allow system/admin writes for metrics
+      allow write: if false;
+    }
+  }
+}

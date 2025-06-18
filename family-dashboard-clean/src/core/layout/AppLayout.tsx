@@ -9,7 +9,8 @@ import {
   CurrencyDollarIcon,
   SunIcon,
   RectangleStackIcon,
-  PlusCircleIcon
+  PlusCircleIcon,
+  CogIcon
 } from '@heroicons/react/24/outline';
 
 interface AppLayoutProps {
@@ -79,6 +80,13 @@ const secondaryApps = [
     path: '/finance',
     icon: CurrencyDollarIcon,
     description: 'Budget tracking'
+  },
+  {
+    id: 'settings',
+    name: 'Settings',
+    path: '/settings',
+    icon: CogIcon,
+    description: 'Family & preferences'
   }
 ];
 

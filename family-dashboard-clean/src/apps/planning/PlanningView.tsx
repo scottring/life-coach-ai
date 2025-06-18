@@ -575,6 +575,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
         isOpen={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         event={selectedEvent}
+        contextId={contextId}
       />
       
     </div>

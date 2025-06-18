@@ -7,6 +7,7 @@ import { CalendarApp } from '../../apps/calendar/CalendarApp';
 import { ProjectsApp } from '../../apps/projects/ProjectsApp';
 import { MealPlannerApp } from '../../apps/meal-planner/MealPlannerApp';
 import { FinanceApp } from '../../apps/finance/FinanceApp';
+import { SettingsApp } from '../../apps/settings/SettingsApp';
 import { TodayView } from '../../apps/today/TodayView';
 import { PlanningView } from '../../apps/planning/PlanningView';
 import { CaptureView } from '../../apps/capture/CaptureView';
@@ -60,6 +61,10 @@ export const AppRouter: React.FC<AppRouterProps> = ({ contextId, userId }) => {
           <Route 
             path="/finance" 
             element={<FinanceApp contextId={contextId} userId={userId} />} 
+          />
+          <Route 
+            path="/settings" 
+            element={<SettingsApp contextId={contextId} userId={userId} />} 
           />
           
           {/* Catch all */}

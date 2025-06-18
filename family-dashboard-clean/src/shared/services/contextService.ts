@@ -109,35 +109,45 @@ export const contextService = {
 
   // Get all contexts for a user
   async getContextsForUser(userId: string): Promise<Context[]> {
-    const accessQuery = query(
-      collection(db, 'user_context_access'),
-      where('userId', '==', userId)
-    );
-    
-    const accessSnapshot = await getDocs(accessQuery);
-    const contexts: Context[] = [];
-    
-    for (const accessDoc of accessSnapshot.docs) {
-      const accessData = accessDoc.data();
-      const contextDoc = await getDoc(doc(db, 'contexts', accessData.contextId));
-      
-      if (contextDoc.exists()) {
-        const contextData = contextDoc.data();
-        contexts.push({
-          id: contextDoc.id,
-          name: contextData.name,
-          type: contextData.type,
-          description: contextData.description,
-          ownerId: contextData.ownerId,
-          createdAt: timestampToDate(contextData.createdAt),
-          updatedAt: timestampToDate(contextData.updatedAt),
-          settings: contextData.settings
-        });
-      }
+    if (!db) {
+      console.warn('Firebase not available, returning empty contexts');
+      return [];
     }
-    
-    // Sort contexts by name in JavaScript instead of database
-    return contexts.sort((a, b) => a.name.localeCompare(b.name));
+
+    try {
+      const accessQuery = query(
+        collection(db, 'user_context_access'),
+        where('userId', '==', userId)
+      );
+      
+      const accessSnapshot = await getDocs(accessQuery);
+      const contexts: Context[] = [];
+      
+      for (const accessDoc of accessSnapshot.docs) {
+        const accessData = accessDoc.data();
+        const contextDoc = await getDoc(doc(db, 'contexts', accessData.contextId));
+        
+        if (contextDoc.exists()) {
+          const contextData = contextDoc.data();
+          contexts.push({
+            id: contextDoc.id,
+            name: contextData.name,
+            type: contextData.type,
+            description: contextData.description,
+            ownerId: contextData.ownerId,
+            createdAt: timestampToDate(contextData.createdAt),
+            updatedAt: timestampToDate(contextData.updatedAt),
+            settings: contextData.settings
+          });
+        }
+      }
+      
+      // Sort contexts by name in JavaScript instead of database
+      return contexts.sort((a, b) => a.name.localeCompare(b.name));
+    } catch (error) {
+      console.error('Error fetching contexts from Firestore:', error);
+      throw error; // Re-throw so the calling code can handle it
+    }
   },
 
   // Get active context for user

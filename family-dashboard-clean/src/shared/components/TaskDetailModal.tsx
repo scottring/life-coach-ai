@@ -1,20 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   XMarkIcon,
   CalendarIcon,
   ClockIcon,
-  UserIcon,
   TagIcon,
   ChatBubbleLeftIcon,
   PencilIcon,
-  TrashIcon
+  TrashIcon,
+  ShareIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 import { taskManager } from '../services/taskManagerService';
+import { contextService } from '../services/contextService';
+import { ContextMember } from '../types/context';
 
 interface TaskDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   event: CalendarEvent | null;
+  contextId?: string;
 }
 
 interface CalendarEvent {
@@ -27,17 +31,36 @@ interface CalendarEvent {
   assignedTo?: string;
 }
 
-export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClose, event }) => {
+export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClose, event, contextId }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [isAddingSubStep, setIsAddingSubStep] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [newNote, setNewNote] = useState('');
   const [editedStartTime, setEditedStartTime] = useState('');
   const [editedEndTime, setEditedEndTime] = useState('');
   const [newSubStepTitle, setNewSubStepTitle] = useState('');
   const [newSubStepDescription, setNewSubStepDescription] = useState('');
+  const [contextMembers, setContextMembers] = useState<ContextMember[]>([]);
+  const [selectedAssignee, setSelectedAssignee] = useState('');
+
+  // Load context members when modal opens
+  useEffect(() => {
+    const loadContextMembers = async () => {
+      if (contextId && isOpen) {
+        try {
+          const members = await contextService.getContextMembers(contextId);
+          setContextMembers(members);
+        } catch (error) {
+          console.error('Error loading context members:', error);
+        }
+      }
+    };
+
+    loadContextMembers();
+  }, [contextId, isOpen]);
 
   if (!isOpen || !event) return null;
 
@@ -199,6 +222,23 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
     }
   };
 
+  const handleStartSharing = () => {
+    setSelectedAssignee(event.assignedTo || '');
+    setIsSharing(true);
+  };
+
+  const handleSaveAssignment = async () => {
+    if (selectedAssignee !== event.assignedTo) {
+      await taskManager.updateTask(event.id, { assignedTo: selectedAssignee || undefined });
+    }
+    setIsSharing(false);
+  };
+
+  const handleCancelSharing = () => {
+    setIsSharing(false);
+    setSelectedAssignee('');
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -322,16 +362,72 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
             </div>
           </div>
 
-          {/* Assignment */}
-          {event.assignedTo && (
-            <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
-              <UserIcon className="w-5 h-5 text-gray-600" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Assigned To</p>
-                <p className="text-sm text-gray-600">{event.assignedTo}</p>
-              </div>
+          {/* Assignment & Sharing */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900">Assignment</h3>
+              {contextMembers.length > 0 && !isSharing && (
+                <button 
+                  onClick={handleStartSharing}
+                  className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition-colors flex items-center space-x-1"
+                >
+                  <ShareIcon className="w-4 h-4" />
+                  <span>Assign</span>
+                </button>
+              )}
             </div>
-          )}
+
+            {isSharing ? (
+              <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Assign to family member:
+                  </label>
+                  <select
+                    value={selectedAssignee}
+                    onChange={(e) => setSelectedAssignee(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Unassigned</option>
+                    {contextMembers.map(member => (
+                      <option key={member.id} value={member.userId}>
+                        {member.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleSaveAssignment}
+                      className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                    >
+                      Save Assignment
+                    </button>
+                    <button
+                      onClick={handleCancelSharing}
+                      className="border border-gray-300 bg-white text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                <UserGroupIcon className="w-5 h-5 text-gray-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">
+                    {event.assignedTo ? 'Assigned To' : 'Assignment'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {event.assignedTo ? 
+                      contextMembers.find(m => m.userId === event.assignedTo)?.displayName || event.assignedTo :
+                      'Unassigned'
+                    }
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Notes Section */}
           {(currentNotes || isAddingNote) && (

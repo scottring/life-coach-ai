@@ -115,5 +115,10 @@ service cloud.firestore {
     match /tasks/{taskId} {
       allow read, write, create: if true; // TODO: Add proper auth later
     }
+
+    // Rules for Family Invitations
+    match /family_invitations/{invitationId} {
+      allow read, write, create: if request.auth != null;
+    }
   }
 }

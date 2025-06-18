@@ -13,6 +13,7 @@ function App() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [activeContext, setActiveContext] = useState<Context | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
 
   // Demo mode for testing without authentication
   const demoUser = { id: 'demo-user', email: 'demo@example.com', name: 'Demo User' };
@@ -22,17 +23,38 @@ function App() {
   useEffect(() => {
     const initializeUserContext = async () => {
       if (user && !demoMode) {
+        setContextLoading(true);
+        
+        // Set a timeout to avoid getting stuck
+        const timeout = setTimeout(() => {
+          console.log('⏰ Context initialization timeout, falling back to demo mode');
+          setDemoMode(true);
+          setContextLoading(false);
+        }, 5000); // 5 second timeout
+
         try {
+          console.log('🔍 Initializing context for user:', user.id);
           const contexts = await contextService.getContextsForUser(user.id);
+          console.log('📋 Found contexts:', contexts.length);
+          
           if (contexts.length === 0) {
+            console.log('🏗️ Creating default family context...');
             // Create default family context for new users
             const defaultContext = await contextService.createDefaultFamilyContext(user.id);
             setActiveContext(defaultContext);
+            console.log('✅ Created default context:', defaultContext.id);
           } else {
             setActiveContext(contexts[0]);
+            console.log('✅ Using existing context:', contexts[0].id);
           }
+          clearTimeout(timeout);
+          setContextLoading(false);
         } catch (error) {
-          console.error('Error initializing user context:', error);
+          console.error('❌ Error initializing user context:', error);
+          console.log('🎭 Falling back to demo mode due to Firebase error');
+          clearTimeout(timeout);
+          setDemoMode(true);
+          setContextLoading(false);
         }
       }
     };
@@ -208,6 +230,21 @@ function App() {
             >
               Try Demo Mode
             </button>
+            
+            <div className="text-center text-sm text-gray-600">
+              <p>Have an invitation code?</p>
+              <button
+                onClick={() => {
+                  const code = window.prompt('Enter your family invitation code:');
+                  if (code) {
+                    alert(`To join a family:\n1. Create an account or sign in\n2. Go to Settings\n3. Use code: ${code}\n\nFor demo: Use demo mode and check console for invitation codes.`);
+                  }
+                }}
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Join Family
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -277,8 +314,24 @@ function App() {
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <h3 className="text-lg font-medium text-gray-900">Setting up your workspace...</h3>
-              <p className="text-gray-500">Please wait while we initialize your account</p>
+              {contextLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <h3 className="text-lg font-medium text-gray-900">Setting up your workspace...</h3>
+                  <p className="text-gray-500">Please wait while we initialize your account</p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-medium text-gray-900">Unable to connect to Firebase</h3>
+                  <p className="text-gray-500 mb-4">There seems to be an issue with the Firebase configuration</p>
+                  <button
+                    onClick={() => setDemoMode(true)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Continue in Demo Mode
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </main>

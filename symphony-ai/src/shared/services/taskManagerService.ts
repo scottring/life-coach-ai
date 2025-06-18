@@ -47,6 +47,21 @@ export interface UniversalTask {
     description?: string;
     isCompleted: boolean;
     isOptional: boolean;
+    assignedTo?: string;
+  }[];
+  
+  // Lists for supplies, ingredients, checklists, etc.
+  lists?: {
+    id: string;
+    title: string;
+    type: 'supplies' | 'ingredients' | 'checklist' | 'notes' | 'custom';
+    items: {
+      id: string;
+      text: string;
+      isChecked?: boolean;
+      quantity?: string;
+      notes?: string;
+    }[];
   }[];
   
   // Timestamps
@@ -293,8 +308,11 @@ class TaskManagerService {
         return this.updateTaskLocal(taskId, updates);
       }
 
+      // Deep clean undefined values for Firestore
+      const cleanUpdates = this.removeUndefinedValues(updates);
+
       const updateData: any = {
-        ...updates,
+        ...cleanUpdates,
         updatedAt: serverTimestamp()
       };
 
@@ -311,6 +329,29 @@ class TaskManagerService {
     } catch (error) {
       console.error('Error updating task in Firestore:', error);
     }
+  }
+
+  // Helper method to recursively remove undefined values
+  private removeUndefinedValues(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return null;
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.removeUndefinedValues(item));
+    }
+    
+    if (typeof obj === 'object') {
+      const cleaned: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+          cleaned[key] = this.removeUndefinedValues(value);
+        }
+      }
+      return cleaned;
+    }
+    
+    return obj;
   }
 
   // Fallback for when Firebase is not available
@@ -398,7 +439,7 @@ class TaskManagerService {
   }
 
   // Update sub-step
-  async updateSubStep(taskId: string, subStepId: string, updates: { title?: string; description?: string; isCompleted?: boolean; isOptional?: boolean }): Promise<void> {
+  async updateSubStep(taskId: string, subStepId: string, updates: { title?: string; description?: string; isCompleted?: boolean; isOptional?: boolean; assignedTo?: string }): Promise<void> {
     const task = this.getTask(taskId);
     if (!task?.subSteps) return;
 
@@ -419,6 +460,124 @@ class TaskManagerService {
     const updatedSubSteps = task.subSteps.filter(subStep => subStep.id !== subStepId);
     await this.updateTask(taskId, {
       subSteps: updatedSubSteps
+    });
+  }
+
+  // ===== LIST MANAGEMENT =====
+
+  // Add list to task
+  async addList(taskId: string, listData: { title: string; type: 'supplies' | 'ingredients' | 'checklist' | 'notes' | 'custom' }): Promise<void> {
+    console.log('TaskManager.addList called for taskId:', taskId);
+    const task = this.getTask(taskId);
+    if (!task) {
+      console.error('Task not found for ID:', taskId);
+      return;
+    }
+
+    console.log('Found task:', task.title, 'current lists:', task.lists?.length || 0);
+
+    const newList = {
+      id: `list_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      title: listData.title,
+      type: listData.type,
+      items: []
+    };
+
+    const existingLists = task.lists || [];
+    console.log('Adding list:', newList, 'to existing lists:', existingLists.length);
+    
+    await this.updateTask(taskId, {
+      lists: [...existingLists, newList]
+    });
+    
+    // Verify the update worked
+    const updatedTask = this.getTask(taskId);
+    console.log('Task updated, new list count:', updatedTask?.lists?.length || 0);
+  }
+
+  // Update list
+  async updateList(taskId: string, listId: string, updates: { title?: string; type?: 'supplies' | 'ingredients' | 'checklist' | 'notes' | 'custom' }): Promise<void> {
+    const task = this.getTask(taskId);
+    if (!task?.lists) return;
+
+    const updatedLists = task.lists.map(list => 
+      list.id === listId ? { ...list, ...updates } : list
+    );
+
+    await this.updateTask(taskId, {
+      lists: updatedLists
+    });
+  }
+
+  // Delete list
+  async deleteList(taskId: string, listId: string): Promise<void> {
+    const task = this.getTask(taskId);
+    if (!task?.lists) return;
+
+    const updatedLists = task.lists.filter(list => list.id !== listId);
+    await this.updateTask(taskId, {
+      lists: updatedLists
+    });
+  }
+
+  // Add item to list
+  async addListItem(taskId: string, listId: string, itemData: { text: string; quantity?: string; notes?: string }): Promise<void> {
+    const task = this.getTask(taskId);
+    if (!task?.lists) return;
+
+    const newItem = {
+      id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      text: itemData.text,
+      isChecked: false,
+      quantity: itemData.quantity,
+      notes: itemData.notes
+    };
+
+    const updatedLists = task.lists.map(list => 
+      list.id === listId 
+        ? { ...list, items: [...list.items, newItem] }
+        : list
+    );
+
+    await this.updateTask(taskId, {
+      lists: updatedLists
+    });
+  }
+
+  // Update list item
+  async updateListItem(taskId: string, listId: string, itemId: string, updates: { text?: string; isChecked?: boolean; quantity?: string; notes?: string }): Promise<void> {
+    const task = this.getTask(taskId);
+    if (!task?.lists) return;
+
+    const updatedLists = task.lists.map(list => 
+      list.id === listId 
+        ? { 
+            ...list, 
+            items: list.items.map(item => 
+              item.id === itemId ? { ...item, ...updates } : item
+            ) 
+          }
+        : list
+    );
+
+    await this.updateTask(taskId, {
+      lists: updatedLists
+    });
+  }
+
+  // Delete list item
+  async deleteListItem(taskId: string, listId: string, itemId: string): Promise<void> {
+    const task = this.getTask(taskId);
+    if (!task?.lists) return;
+
+    const updatedLists = task.lists.map(list => 
+      list.id === listId 
+        ? { ...list, items: list.items.filter(item => item.id !== itemId) }
+        : list
+    );
+
+    await this.updateTask(taskId, {
+      lists: updatedLists
     });
   }
 

@@ -17,18 +17,25 @@ import {
   InboxIcon,
   ClipboardDocumentListIcon,
   FolderIcon,
-  FlagIcon
+  FlagIcon,
+  MagnifyingGlassIcon,
+  ChatBubbleLeftRightIcon,
+  SparklesIcon,
+  CogIcon,
+  XMarkIcon,
+  Bars3Icon
 } from '@heroicons/react/24/outline';
 import { TaskDetailModal } from '../../shared/components/TaskDetailModal';
 import { SOPTooltip } from '../../shared/components/SOPTooltip';
 import { taskManager, UniversalTask } from '../../shared/services/taskManagerService';
 import { sopService } from '../../shared/services/sopService';
 import { goalService } from '../../shared/services/goalService';
+import { aiPlanningService, PlanningContext, PlanningSession, ContextualItems } from '../../shared/services/aiPlanningService';
 import './planning-calendar.css';
 
 interface PlanningViewProps {
   contextId: string;
-  userId: string;
+  userId?: string;
 }
 
 interface SchedulableItem {
@@ -62,7 +69,7 @@ interface CalendarEvent {
   };
 }
 
-export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
+export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId }) => {
   const calendarRef = useRef<FullCalendar>(null);
   const [unscheduledItems, setUnscheduledItems] = useState<SchedulableItem[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
@@ -72,21 +79,40 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
   const [currentView, setCurrentView] = useState('timeGridWeek');
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   
-  // Sidebar sections data
+  // AI Planning System
+  const [planningSession, setPlanningSession] = useState<PlanningSession | null>(null);
+  const [contextualItems, setContextualItems] = useState<ContextualItems | null>(null);
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const [aiMessage, setAiMessage] = useState('');
+  const [planningContext, setPlanningContext] = useState<PlanningContext>({
+    participants: [userId || 'current_user'],
+    scope: 'family',
+    timeframe: 'weekly',
+    contextId,
+    sessionId: '',
+    preferences: {
+      workingHours: { start: '09:00', end: '17:00' },
+      preferredDays: ['1', '2', '3', '4', '5'], // Monday-Friday
+      energyPatterns: { morning: 'high', afternoon: 'medium', evening: 'low' }
+    }
+  });
+  
+  // Sidebar state
   const [sidebarData, setSidebarData] = useState({
     inbox: [] as SchedulableItem[],
     sops: [] as any[],
     projects: [] as any[],
     goals: [] as any[]
   });
-  
-  // Sidebar section expanded states
   const [expandedSections, setExpandedSections] = useState({
     inbox: true,
     sops: false,
     projects: false,
     goals: false
   });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Initialize draggable functionality
   useEffect(() => {
@@ -94,21 +120,40 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
     
     const initializeDraggable = () => {
       const draggableEl = document.getElementById('unscheduled-container');
-      if (draggableEl && unscheduledItems.length > 0) {
+      if (draggableEl) {
         draggableInstance = new Draggable(draggableEl, {
           itemSelector: '.draggable-task',
           eventData: function(eventEl) {
+            const title = eventEl.getAttribute('data-title') || 'Untitled Task';
+            const duration = eventEl.getAttribute('data-duration') || '30';
+            const isEntireSOP = eventEl.getAttribute('data-entire-sop') === 'true';
+            const sopId = eventEl.getAttribute('data-sop-id');
+            const stepId = eventEl.getAttribute('data-step-id');
+            const searchResult = eventEl.getAttribute('data-search-result') === 'true';
+            
+            console.log('Dragging item:', { title, duration, isEntireSOP, sopId, stepId, searchResult });
+            
             return {
-              title: eventEl.getAttribute('data-title') || 'Untitled Task',
-              duration: eventEl.getAttribute('data-duration') || '30'
+              title,
+              duration: parseInt(duration),
+              extendedProps: {
+                isEntireSOP,
+                sopId,
+                stepId,
+                searchResult,
+                originalElement: eventEl
+              }
             };
           }
         });
+        console.log('✅ Draggable initialized for container');
+      } else {
+        console.log('⚠️ Could not find unscheduled-container element');
       }
     };
 
     // Small delay to ensure DOM is ready
-    const timer = setTimeout(initializeDraggable, 100);
+    const timer = setTimeout(initializeDraggable, 500);
 
     return () => {
       clearTimeout(timer);
@@ -116,7 +161,33 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
         draggableInstance.destroy();
       }
     };
-  }, [unscheduledItems]);
+  }, [sidebarData, searchResults]); // Re-initialize when sidebar data changes
+
+  // Initialize AI planning system
+  useEffect(() => {
+    const initializeAIPlanning = async () => {
+      try {
+        // Get contextual items using AI service
+        const items = await aiPlanningService.getContextualItems(planningContext);
+        setContextualItems(items);
+        
+        // Update sidebar with contextually filtered data
+        setSidebarData({
+          inbox: items.urgentTasks.filter(task => task.source === 'manual' || task.type === 'task'),
+          sops: items.relevantSOPs,
+          projects: items.currentProjects,
+          goals: items.activeGoals
+        });
+        
+      } catch (error) {
+        console.error('Error initializing AI planning:', error);
+      }
+    };
+
+    if (contextId && userId) {
+      initializeAIPlanning();
+    }
+  }, [contextId, userId, planningContext]);
 
   // Load all planning data including sidebar sections
   useEffect(() => {
@@ -124,41 +195,6 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
       try {
         console.log(`🔍 Loading planning data for contextId: ${contextId}`);
         
-        // Get unscheduled tasks for inbox
-        const unscheduledTasks = taskManager.getUnscheduledTasks(contextId);
-        console.log(`🚀 Got ${unscheduledTasks.length} unscheduled tasks from taskManager`);
-        
-        // Convert to inbox items (only standalone tasks, not SOP/project/goal derived)
-        const inboxItems: SchedulableItem[] = unscheduledTasks
-          .filter(task => task.source === 'manual' || task.type === 'task')
-          .map(task => ({
-            id: task.id,
-            title: task.title,
-            type: task.type,
-            status: task.status,
-            context: task.context,
-            priority: task.priority,
-            duration: task.duration,
-            assignedTo: task.assignedTo,
-            scheduledDate: task.scheduledDate,
-            scheduledTime: task.scheduledTime
-          }));
-
-        // Load SOPs, Projects, and Goals
-        const [sops, projects, goals] = await Promise.all([
-          sopService.getSOPsForContext(contextId),
-          goalService.getProjectsByContext(contextId),
-          goalService.getGoalsByContext(contextId)
-        ]);
-
-        // Update sidebar data
-        setSidebarData({
-          inbox: inboxItems,
-          sops: sops || [],
-          projects: projects || [],
-          goals: goals || []
-        });
-
         // Get scheduled tasks and convert to calendar events
         const scheduledTasks = taskManager.getScheduledTasks(contextId);
         const calendarEvents: CalendarEvent[] = scheduledTasks
@@ -177,25 +213,33 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
               endDate.setMinutes(endDate.getMinutes() + 30); // Default 30 min
             }
 
+            // Detect SOP containers and steps for special styling
+            const isSOPContainer = task.tags?.includes('sop-container');
+            const isSOPStep = task.tags?.includes('sop-step');
+            const containerTag = task.tags?.find(tag => tag.startsWith('container:'));
+            const containerId = containerTag ? containerTag.split(':')[1] : null;
+
             return {
               id: task.id,
               title: task.title,
               start: startDate.toISOString(),
               end: endDate.toISOString(),
-              backgroundColor: getContextColor(task.context),
-              borderColor: getContextColor(task.context),
+              backgroundColor: isSOPContainer ? '#8b5cf6' : isSOPStep ? '#a855f7' : getContextColor(task.context),
+              borderColor: isSOPContainer ? '#7c3aed' : isSOPStep ? '#9333ea' : getContextColor(task.context),
               textColor: '#ffffff',
               extendedProps: {
                 type: task.type,
                 duration: task.duration,
                 priority: task.priority,
                 assignedTo: task.assignedTo,
-                taskId: task.id
+                taskId: task.id,
+                isSOPContainer,
+                isSOPStep,
+                containerId
               }
             };
           });
 
-        setUnscheduledItems(inboxItems); // Keep for drag/drop compatibility
         setCalendarEvents(calendarEvents);
         setLoading(false);
       } catch (error) {
@@ -264,50 +308,194 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
 
   const handleExternalDrop = async (info: any) => {
     try {
-      console.log('Drop info:', info);
-      console.log('Dragged element:', info.draggedEl);
-      console.log('Dataset:', info.draggedEl.dataset);
+      console.log('🎯 External drop event:', info);
+      console.log('📦 Dragged element:', info.draggedEl);
       
-      const taskId = info.draggedEl.getAttribute('data-task-id');
-      
-      if (!taskId) {
-        console.error('No task ID found in dragged element');
-        console.log('Available data attributes:', Object.keys(info.draggedEl.dataset));
-        return;
-      }
-
       const dropDate = info.date;
       const dropTime = dropDate.toTimeString().slice(0, 5); // HH:MM format
       
-      console.log('Scheduling task:', taskId, 'for', dropDate, 'at', dropTime);
+      // Get data from dragged element
+      const title = info.draggedEl.getAttribute('data-title');
+      const duration = parseInt(info.draggedEl.getAttribute('data-duration') || '30');
+      const isEntireSOP = info.draggedEl.getAttribute('data-entire-sop') === 'true';
+      const sopId = info.draggedEl.getAttribute('data-sop-id');
+      const stepId = info.draggedEl.getAttribute('data-step-id');
+      const taskId = info.draggedEl.getAttribute('data-task-id');
+      const projectId = info.draggedEl.getAttribute('data-project-id');
+      const goalId = info.draggedEl.getAttribute('data-goal-id');
+      const searchResult = info.draggedEl.getAttribute('data-search-result') === 'true';
       
-      // Wait a moment for task to sync, then schedule
-      let attempts = 0;
-      const maxAttempts = 10;
-      
-      const trySchedule = async () => {
-        try {
-          await taskManager.scheduleTask(taskId, dropDate, dropTime);
-          // Let React handle DOM updates instead of manually removing
-          console.log('✅ Task scheduled, React will update DOM');
-          return true;
-        } catch (error) {
-          attempts++;
-          if (attempts < maxAttempts) {
-            console.log(`⏳ Scheduling attempt ${attempts}, retrying in 500ms...`);
-            setTimeout(trySchedule, 500);
-          } else {
-            console.error('Failed to schedule task after', maxAttempts, 'attempts');
-            throw error;
+      console.log('📋 Drop data:', { 
+        title, duration, isEntireSOP, sopId, stepId, taskId, 
+        projectId, goalId, searchResult, dropDate, dropTime 
+      });
+
+      let taskToSchedule = null;
+
+      if (searchResult) {
+        // Handle search result drops - create task from search result
+        console.log('🔍 Handling search result drop');
+        // This would need the search result data to create appropriate task
+        // For now, create a basic task
+        taskToSchedule = await taskManager.createTask({
+          id: `search_${Math.random().toString(36).substring(2, 15)}`,
+          title: title || 'Search Result Task',
+          type: 'task' as const,
+          status: 'pending' as const,
+          priority: 'medium' as const,
+          contextId: contextId,
+          context: contextId as any,
+          duration: duration,
+          createdBy: 'user',
+          source: 'manual' as const,
+          scheduledDate: dropDate,
+          scheduledTime: dropTime
+        });
+      } else if (taskId) {
+        // Handle existing task drops (inbox items)
+        console.log('📝 Handling existing task drop');
+        await taskManager.scheduleTask(taskId, dropDate, dropTime);
+        console.log('✅ Existing task scheduled');
+        return;
+      } else if (isEntireSOP && sopId) {
+        // Handle entire SOP drops - create container task + individual step tasks
+        console.log('📋 Handling entire SOP drop');
+        const sop = sidebarData.sops.find(s => s.id === sopId);
+        if (sop && sop.steps) {
+          const sopContainerId = `sop_container_${Math.random().toString(36).substring(2, 15)}`;
+          
+          // Create a container task representing the entire SOP
+          const containerTask = await taskManager.createTask({
+            id: sopContainerId,
+            title: `📋 ${sop.name}`,
+            notes: `SOP Container: ${sop.steps.length} steps`,
+            type: 'sop' as const,
+            status: 'pending' as const,
+            priority: 'medium' as const,
+            contextId: contextId,
+            context: contextId as any,
+            duration: duration,
+            assignedTo: sop.defaultAssignee,
+            createdBy: sop.createdBy || 'user',
+            source: 'import' as const,
+            scheduledDate: dropDate,
+            scheduledTime: dropTime,
+            tags: ['sop-container']
+          });
+
+          // Create individual step tasks as sub-tasks
+          let stepStartTime = new Date(dropDate);
+          stepStartTime.setHours(parseInt(dropTime.split(':')[0]), parseInt(dropTime.split(':')[1]));
+
+          for (let i = 0; i < sop.steps.length; i++) {
+            const step = sop.steps[i];
+            const stepDuration = step.estimatedDuration || 30;
+            
+            await taskManager.createTask({
+              id: `sop_step_${Math.random().toString(36).substring(2, 15)}`,
+              title: `${i + 1}. ${step.title}`,
+              notes: step.description,
+              type: 'sop' as const,
+              status: 'pending' as const,
+              priority: 'medium' as const,
+              contextId: contextId,
+              context: contextId as any,
+              duration: stepDuration,
+              assignedTo: sop.defaultAssignee,
+              createdBy: sop.createdBy || 'user',
+              source: 'import' as const,
+              scheduledDate: stepStartTime,
+              scheduledTime: stepStartTime.toTimeString().slice(0, 5),
+              tags: ['sop-step', `container:${sopContainerId}`]
+            });
+
+            // Advance start time for next step
+            stepStartTime.setMinutes(stepStartTime.getMinutes() + stepDuration);
           }
+
+          taskToSchedule = containerTask;
         }
-      };
-      
-      await trySchedule();
-      
-      console.log('✅ Task scheduled successfully');
+      } else if (sopId && stepId) {
+        // Handle individual SOP step drops
+        console.log('🔹 Handling SOP step drop');
+        const sop = sidebarData.sops.find(s => s.id === sopId);
+        const step = sop?.steps?.find((s: any) => s.id === stepId);
+        if (sop && step) {
+          taskToSchedule = await taskManager.createTask({
+            id: `sop_step_${Math.random().toString(36).substring(2, 15)}`,
+            title: step.title,
+            notes: step.description,
+            type: 'sop' as const,
+            status: 'pending' as const,
+            priority: 'medium' as const,
+            contextId: contextId,
+            context: contextId as any,
+            duration: step.estimatedDuration || 30,
+            assignedTo: sop.defaultAssignee,
+            createdBy: sop.createdBy || 'user',
+            source: 'import' as const,
+            scheduledDate: dropDate,
+            scheduledTime: dropTime
+          });
+        }
+      } else if (projectId) {
+        // Handle project task drops
+        console.log('📁 Handling project task drop');
+        const project = sidebarData.projects.find(p => p.id === projectId);
+        const task = project?.tasks?.find((t: any) => t.id === taskId);
+        if (project && task) {
+          taskToSchedule = await taskManager.createTask({
+            id: `project_task_${Math.random().toString(36).substring(2, 15)}`,
+            title: task.title,
+            notes: task.description,
+            type: 'project' as const,
+            status: 'pending' as const,
+            priority: task.priority as any,
+            contextId: contextId,
+            context: contextId as any,
+            duration: task.estimatedDuration || 30,
+            assignedTo: task.assignedTo,
+            createdBy: project.createdBy || 'user',
+            source: 'import' as const,
+            scheduledDate: dropDate,
+            scheduledTime: dropTime
+          });
+        }
+      } else if (goalId) {
+        // Handle goal task drops
+        console.log('🎯 Handling goal task drop');
+        const goal = sidebarData.goals.find(g => g.id === goalId);
+        const task = goal?.tasks?.find((t: any) => t.id === taskId);
+        if (goal && task) {
+          taskToSchedule = await taskManager.createTask({
+            id: `goal_task_${Math.random().toString(36).substring(2, 15)}`,
+            title: task.title,
+            notes: task.description,
+            type: 'task' as const,
+            status: 'pending' as const,
+            priority: task.priority as any,
+            contextId: contextId,
+            context: contextId as any,
+            duration: task.estimatedDuration || 30,
+            assignedTo: task.assignedTo,
+            createdBy: goal.createdBy || 'user',
+            source: 'import' as const,
+            scheduledDate: dropDate,
+            scheduledTime: dropTime
+          });
+        }
+      }
+
+      if (taskToSchedule) {
+        console.log('✅ Task created and scheduled:', taskToSchedule.title);
+      } else {
+        console.error('❌ Could not determine how to handle drop');
+      }
+
     } catch (error) {
-      console.error('Error scheduling task:', error);
+      console.error('💥 Error in handleExternalDrop:', error);
+      // Revert the drop
+      info.revert();
     }
   };
 
@@ -419,6 +607,92 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
     return await taskManager.createTask(taskData);
   };
 
+  // Search functionality
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    setIsSearching(query.length > 0);
+    
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    if (planningSession) {
+      try {
+        const results = await aiPlanningService.searchItems(planningSession.id, query);
+        setSearchResults(results);
+      } catch (error) {
+        console.error('Error searching items:', error);
+        setSearchResults([]);
+      }
+    }
+  };
+
+  // AI Assistant functions
+  const startAISession = async () => {
+    try {
+      const session = await aiPlanningService.startPlanningSession(planningContext);
+      setPlanningSession(session);
+      setShowAIAssistant(true);
+    } catch (error) {
+      console.error('Error starting AI session:', error);
+    }
+  };
+
+  const sendAIMessage = async () => {
+    if (!planningSession || !aiMessage.trim()) return;
+
+    try {
+      await aiPlanningService.processUserMessage(planningSession.id, aiMessage);
+      setAiMessage('');
+      
+      // Refresh session data
+      const updatedSession = aiPlanningService.getSession(planningSession.id);
+      if (updatedSession) {
+        setPlanningSession(updatedSession);
+      }
+    } catch (error) {
+      console.error('Error sending AI message:', error);
+    }
+  };
+
+  const switchAIMode = async (mode: 'manual' | 'guided') => {
+    if (!planningSession) return;
+
+    try {
+      await aiPlanningService.switchMode(planningSession.id, mode);
+      
+      // Refresh session data
+      const updatedSession = aiPlanningService.getSession(planningSession.id);
+      if (updatedSession) {
+        setPlanningSession(updatedSession);
+      }
+    } catch (error) {
+      console.error('Error switching AI mode:', error);
+    }
+  };
+
+  const changePlanningContext = async (newContext: Partial<PlanningContext>) => {
+    const updatedContext = { ...planningContext, ...newContext };
+    setPlanningContext(updatedContext);
+    
+    // Refresh contextual items with new context
+    try {
+      const items = await aiPlanningService.getContextualItems(updatedContext);
+      setContextualItems(items);
+      
+      // Update sidebar with new contextual data
+      setSidebarData({
+        inbox: items.urgentTasks.filter(task => task.source === 'manual' || task.type === 'task'),
+        sops: items.relevantSOPs,
+        projects: items.currentProjects,
+        goals: items.activeGoals
+      });
+    } catch (error) {
+      console.error('Error updating planning context:', error);
+    }
+  };
+
   const getContextColor = (context: string) => {
     switch (context) {
       case 'work': return '#059669'; // green
@@ -477,16 +751,54 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Planning</h1>
-          <p className="text-gray-500 mt-1">Schedule and organize your time</p>
+          <p className="text-gray-500 mt-1">
+            {planningContext.scope === 'family' ? 'Family' : planningContext.scope === 'work' ? 'Work' : 'Personal'} • 
+            {planningContext.timeframe === 'weekly' ? ' Weekly' : planningContext.timeframe === 'monthly' ? ' Monthly' : ' Daily'} Planning
+            {planningSession && (
+              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-700">
+                <SparklesIcon className="w-3 h-3 mr-1" />
+                AI Active
+              </span>
+            )}
+          </p>
         </div>
         
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
+          {/* Context Selector */}
+          <div className="flex items-center space-x-2 border border-gray-300 bg-white px-3 py-2 rounded-lg">
+            <CogIcon className="w-4 h-4 text-gray-400" />
+            <select
+              value={planningContext.scope}
+              onChange={(e) => changePlanningContext({ scope: e.target.value as any })}
+              className="border-none bg-transparent text-sm focus:outline-none"
+            >
+              <option value="family">Family</option>
+              <option value="personal">Personal</option>
+              <option value="work">Work</option>
+            </select>
+            <span className="text-gray-300">•</span>
+            <select
+              value={planningContext.timeframe}
+              onChange={(e) => changePlanningContext({ timeframe: e.target.value as any })}
+              className="border-none bg-transparent text-sm focus:outline-none"
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+
+          {/* AI Assistant Toggle */}
           <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center space-x-2 border border-gray-300 bg-white px-4 py-2 rounded-lg hover:bg-gray-50"
+            onClick={planningSession ? () => setShowAIAssistant(!showAIAssistant) : startAISession}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+              planningSession 
+                ? 'bg-green-600 text-white hover:bg-green-700' 
+                : 'bg-purple-600 text-white hover:bg-purple-700'
+            }`}
           >
-            <AdjustmentsHorizontalIcon className="w-4 h-4" />
-            <span>Filters</span>
+            <SparklesIcon className="w-4 h-4" />
+            <span>{planningSession ? 'AI Assistant' : 'Start AI Planning'}</span>
           </button>
           
           <button 
@@ -504,16 +816,105 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
         <div className="lg:col-span-1">
           <div className="bg-white border border-gray-200 rounded-lg">
             <div className="p-4 border-b border-gray-200">
-              <h3 className="font-medium text-gray-900 flex items-center">
+              <h3 className="font-medium text-gray-900 flex items-center mb-3">
                 <UserGroupIcon className="w-5 h-5 mr-2" />
                 Unscheduled Items
               </h3>
-              <p className="text-sm text-gray-500">Drag to schedule</p>
+              
+              {/* Search Bar */}
+              <div className="relative mb-3">
+                <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search all items..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => handleSearch('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              
+              <p className="text-xs text-gray-500">
+                {isSearching ? `${searchResults.length} search results` : 'Drag to schedule'}
+              </p>
             </div>
             
-            <div id="unscheduled-container" className="max-h-96 overflow-y-auto">
+            <div id="unscheduled-container" className="max-h-80 overflow-y-auto">
               
-              {/* Inbox Section */}
+              {/* Search Results */}
+              {isSearching && searchResults.length > 0 && (
+                <div className="p-3 space-y-2">
+                  <h4 className="text-xs font-medium text-gray-700 uppercase tracking-wider">Search Results</h4>
+                  {searchResults.map((result) => (
+                    <div
+                      key={`${result.searchType}_${result.id}`}
+                      draggable
+                      data-search-result="true"
+                      data-result-type={result.searchType}
+                      data-title={result.title || result.name}
+                      data-duration={result.duration || result.estimatedDuration || 30}
+                      className="draggable-task p-2 border border-gray-200 rounded-lg cursor-move hover:shadow-md transition-shadow bg-white"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                              {result.searchSource}
+                            </span>
+                            <h4 className="font-medium text-gray-900 text-sm truncate">
+                              {result.title || result.name}
+                            </h4>
+                          </div>
+                          {result.description && (
+                            <p className="text-xs text-gray-600 truncate">{result.description}</p>
+                          )}
+                          <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
+                            {(result.duration || result.estimatedDuration) && (
+                              <>
+                                <ClockIcon className="w-3 h-3" />
+                                <span>{result.duration || result.estimatedDuration}m</span>
+                              </>
+                            )}
+                            {result.priority && (
+                              <>
+                                <span className="text-gray-400">•</span>
+                                <span className={`px-1 py-0.5 rounded text-xs ${
+                                  result.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                  result.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {result.priority}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Show message when searching but no results */}
+              {isSearching && searchResults.length === 0 && searchQuery.length > 1 && (
+                <div className="p-6 text-center text-gray-500">
+                  <MagnifyingGlassIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No items found for "{searchQuery}"</p>
+                  <p className="text-xs mt-1">Try a different search term</p>
+                </div>
+              )}
+
+              {/* Contextual Sections (shown when not searching) */}
+              {!isSearching && (
+                <>
+                  {/* Inbox Section */}
               <div className="border-b border-gray-100">
                 <button
                   onClick={() => toggleSection('inbox')}
@@ -607,36 +1008,80 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
                 </button>
                 
                 {expandedSections.sops && (
-                  <div className="px-3 pb-3 space-y-2">
-                    {sidebarData.sops.map((sop) => (
-                      <div key={sop.id} className="space-y-1">
-                        <h5 className="text-xs font-medium text-gray-700 px-2 py-1 bg-gray-50 rounded">
-                          {sop.name} ({sop.steps?.length || 0} steps)
-                        </h5>
-                        {sop.steps?.map((step: any, index: number) => (
-                          <div
-                            key={step.id}
-                            draggable
-                            data-sop-id={sop.id}
-                            data-step-id={step.id}
-                            data-title={step.title}
-                            data-duration={step.estimatedDuration || 30}
-                            className="draggable-task p-2 ml-2 border border-purple-200 rounded-lg cursor-move hover:shadow-md transition-shadow bg-purple-50"
-                          >
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs text-purple-600 font-mono">#{index + 1}</span>
-                              <span className="text-sm font-medium text-gray-900 truncate">{step.title}</span>
-                            </div>
-                            {step.estimatedDuration && (
-                              <div className="text-xs text-gray-600 mt-1">
-                                <ClockIcon className="w-3 h-3 inline mr-1" />
-                                {step.estimatedDuration}m
+                  <div className="px-3 pb-3 space-y-3">
+                    {sidebarData.sops.map((sop) => {
+                      const totalDuration = sop.steps?.reduce((sum: number, step: any) => sum + (step.estimatedDuration || 30), 0) || 30;
+                      return (
+                        <div key={sop.id} className="relative">
+                          {/* SOP Container with Drag Handle */}
+                          <div className="border-2 border-purple-200 rounded-lg bg-purple-50 hover:border-purple-300 transition-colors">
+                            {/* Drag Handle for Entire SOP */}
+                            <div
+                              draggable
+                              data-sop-id={sop.id}
+                              data-entire-sop="true"
+                              data-title={sop.name}
+                              data-duration={totalDuration}
+                              className="draggable-task flex items-center justify-between p-3 cursor-move hover:bg-purple-100 rounded-t-lg border-b border-purple-200"
+                              title="Drag to schedule entire SOP"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <Bars3Icon className="w-4 h-4 text-purple-600" />
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-gray-900 text-sm">{sop.name}</h4>
+                                  <div className="flex items-center space-x-2 text-xs text-gray-600">
+                                    <span>{sop.steps?.length || 0} steps</span>
+                                    <span className="text-gray-400">•</span>
+                                    <ClockIcon className="w-3 h-3" />
+                                    <span>
+                                      {totalDuration >= 60 
+                                        ? `${Math.floor(totalDuration / 60)}h ${totalDuration % 60}m`
+                                        : `${totalDuration}m`
+                                      }
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            )}
+                              <ClipboardDocumentListIcon className="w-4 h-4 text-purple-600" />
+                            </div>
+                            
+                            {/* Individual Steps Container */}
+                            <div className="p-2 space-y-1">
+                              {sop.steps?.map((step: any, index: number) => (
+                                <div
+                                  key={step.id}
+                                  draggable
+                                  data-sop-id={sop.id}
+                                  data-step-id={step.id}
+                                  data-title={step.title}
+                                  data-duration={step.estimatedDuration || 30}
+                                  className="draggable-task flex items-center space-x-2 p-2 bg-white border border-purple-100 rounded cursor-move hover:shadow-sm hover:border-purple-200 transition-all"
+                                  title="Drag to schedule this step only"
+                                >
+                                  <span className="text-xs text-purple-600 font-mono w-8 text-center">#{index + 1}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-medium text-gray-900 truncate block">{step.title}</span>
+                                    {step.estimatedDuration && (
+                                      <div className="flex items-center text-xs text-gray-600 mt-0.5">
+                                        <ClockIcon className="w-3 h-3 mr-1" />
+                                        {step.estimatedDuration}m
+                                      </div>
+                                    )}
+                                  </div>
+                                  <Bars3Icon className="w-3 h-3 text-gray-400" />
+                                </div>
+                              ))}
+                              
+                              {(!sop.steps || sop.steps.length === 0) && (
+                                <div className="text-center py-2 text-gray-500">
+                                  <p className="text-xs">No steps defined</p>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                     
                     {sidebarData.sops.length === 0 && (
                       <div className="text-center py-4 text-gray-500">
@@ -791,6 +1236,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
                   </div>
                 )}
               </div>
+                </>
+              )}
               
             </div>
           </div>
@@ -848,15 +1295,171 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
               drop={handleExternalDrop}
               eventClassNames={(arg) => {
                 const type = arg.event.extendedProps?.type;
+                const isSOPContainer = arg.event.extendedProps?.isSOPContainer;
+                const isSOPStep = arg.event.extendedProps?.isSOPStep;
+                const containerId = arg.event.extendedProps?.containerId;
+                
                 return [
                   'fc-event-custom',
-                  type ? `fc-event-${type}` : ''
+                  type ? `fc-event-${type}` : '',
+                  isSOPContainer ? 'fc-event-sop-container' : '',
+                  isSOPStep ? 'fc-event-sop-step' : '',
+                  containerId ? `fc-event-container-${containerId}` : ''
                 ].filter(Boolean);
               }}
             />
           </div>
         </div>
       </div>
+
+      {/* AI Assistant Panel */}
+      {showAIAssistant && planningSession && (
+        <div className="fixed inset-y-0 right-0 w-96 bg-white border-l border-gray-200 shadow-xl z-50 flex flex-col">
+          {/* AI Assistant Header */}
+          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <SparklesIcon className="w-5 h-5 text-purple-600" />
+                <h3 className="font-medium text-gray-900">AI Planning Assistant</h3>
+              </div>
+              <div className="flex items-center space-x-2">
+                {/* Mode Toggle */}
+                <div className="flex items-center bg-white rounded-lg p-1 border">
+                  <button
+                    onClick={() => switchAIMode('guided')}
+                    className={`px-3 py-1 text-xs rounded transition-colors ${
+                      planningSession.mode === 'guided' 
+                        ? 'bg-purple-600 text-white' 
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Guided
+                  </button>
+                  <button
+                    onClick={() => switchAIMode('manual')}
+                    className={`px-3 py-1 text-xs rounded transition-colors ${
+                      planningSession.mode === 'manual' 
+                        ? 'bg-purple-600 text-white' 
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Manual
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowAIAssistant(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              {planningSession.mode === 'guided' 
+                ? 'I\'ll guide you through planning step by step' 
+                : 'I\'ll provide suggestions as you work'
+              }
+            </p>
+          </div>
+
+          {/* Conversation Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {planningSession.conversation.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.speaker === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    message.speaker === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  {message.metadata?.suggestedItems && (
+                    <div className="mt-2 space-y-1">
+                      {message.metadata.suggestedItems.slice(0, 3).map((item: any, index: number) => (
+                        <div key={index} className="text-xs opacity-75 p-2 bg-white bg-opacity-20 rounded">
+                          • {item.title || item.name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-xs opacity-75 mt-1">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {/* AI Suggestions */}
+            {planningSession.suggestions.length > 0 && (
+              <div className="border-t border-gray-200 pt-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-2">AI Suggestions</h4>
+                <div className="space-y-2">
+                  {planningSession.suggestions.slice(-3).map((suggestion) => (
+                    <div key={suggestion.id} className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-sm text-amber-800">{suggestion.reasoning}</p>
+                      {suggestion.suggestedTime && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Suggested: {suggestion.suggestedTime.date} at {suggestion.suggestedTime.time}
+                        </p>
+                      )}
+                      <div className="flex space-x-2 mt-2">
+                        <button
+                          onClick={() => aiPlanningService.applySuggestion(planningSession.id, suggestion.id, 'accepted')}
+                          className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => aiPlanningService.applySuggestion(planningSession.id, suggestion.id, 'rejected')}
+                          className="text-xs bg-gray-600 text-white px-2 py-1 rounded hover:bg-gray-700"
+                        >
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Message Input */}
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={aiMessage}
+                onChange={(e) => setAiMessage(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendAIMessage()}
+                placeholder="Type your message..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+              <button
+                onClick={sendAIMessage}
+                disabled={!aiMessage.trim()}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChatBubbleLeftRightIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {['Help me plan', 'Show urgent items', 'Suggest schedule', 'Weekly review'].map((quickAction) => (
+                <button
+                  key={quickAction}
+                  onClick={() => setAiMessage(quickAction)}
+                  className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200"
+                >
+                  {quickAction}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Task Detail Modal */}
       <TaskDetailModal

@@ -5,14 +5,11 @@ import {
   CheckIcon,
   CalendarIcon,
   UserIcon,
-  SparklesIcon,
   ArrowRightIcon,
   EllipsisHorizontalIcon
 } from '@heroicons/react/24/outline';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { TaskDetailModal } from '../../shared/components/TaskDetailModal';
-import { SOPTooltip } from '../../shared/components/SOPTooltip';
-import { TaskDebugger } from '../../shared/components/TaskDebugger';
 import { taskManager, UniversalTask } from '../../shared/services/taskManagerService';
 
 interface TodayViewProps {
@@ -32,19 +29,12 @@ interface TodayItem {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   parentTitle?: string; // Project name, SOP name, etc.
   notes?: string;
+  tags?: string[]; // Added tags property for filtering
 }
 
-interface AIInsight {
-  id: string;
-  type: 'suggestion' | 'reminder' | 'optimization';
-  message: string;
-  actionable: boolean;
-  relatedItems?: string[];
-}
 
 export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
   const [todayItems, setTodayItems] = useState<TodayItem[]>([]);
-  const [aiInsights, setAiInsights] = useState<AIInsight[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCompleted, setShowCompleted] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -56,7 +46,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
         // Get today's tasks from task manager
         const universalTasks = taskManager.getTodayTasks(contextId);
         
-        // Convert to TodayItem format
+        // Convert to TodayItem format with tags
         const todayTaskItems: TodayItem[] = universalTasks.map(task => ({
           id: task.id,
           title: task.title,
@@ -67,34 +57,11 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
           context: task.context,
           priority: task.priority,
           assignedTo: task.assignedTo,
-          notes: task.notes
+          notes: task.notes,
+          tags: task.tags || []
         }));
 
         setTodayItems(todayTaskItems);
-
-        // Generate AI insights based on actual tasks
-        const insights: AIInsight[] = [];
-        
-        if (todayTaskItems.length > 0) {
-          insights.push({
-            id: 'ai1',
-            type: 'optimization',
-            message: `You have ${todayTaskItems.filter(t => t.status === 'pending').length} tasks planned for today. ${todayTaskItems.filter(t => t.priority === 'high').length > 0 ? 'Focus on high-priority items first.' : 'Great planning!'}`,
-            actionable: true
-          });
-        }
-        
-        const unscheduledCount = todayTaskItems.filter(t => !t.time).length;
-        if (unscheduledCount > 0) {
-          insights.push({
-            id: 'ai2',
-            type: 'suggestion',
-            message: `${unscheduledCount} tasks need scheduling. Visit Planning view to add them to your calendar.`,
-            actionable: true
-          });
-        }
-
-        setAiInsights(insights);
         setLoading(false);
       } catch (error) {
         console.error('Error loading today tasks:', error);
@@ -117,27 +84,41 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
     };
   }, [contextId]);
 
+  // Group items by time with simple sorting
   const groupItemsByTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     
+    // Simple sorting by time, then by title
+    const sortedItems = [...todayItems].sort((a, b) => {
+      // Sort by time first
+      if (a.time && b.time) {
+        return a.time.localeCompare(b.time);
+      }
+      if (!a.time && b.time) return 1;
+      if (a.time && !b.time) return -1;
+      
+      // Then by title for consistency
+      return a.title.localeCompare(b.title);
+    });
+    
     const groups = {
-      overdue: todayItems.filter(item => {
+      overdue: sortedItems.filter(item => {
         if (!item.time) return false;
         const itemHour = parseInt(item.time.split(':')[0]);
         return itemHour < currentHour && item.status !== 'completed';
       }),
-      current: todayItems.filter(item => {
-        if (!item.time) return currentHour >= 9 && currentHour < 12; // Morning items without time
+      current: sortedItems.filter(item => {
+        if (!item.time) return false;
         const itemHour = parseInt(item.time.split(':')[0]);
         return Math.abs(itemHour - currentHour) <= 1 && item.status !== 'completed';
       }),
-      upcoming: todayItems.filter(item => {
-        if (!item.time) return currentHour >= 12; // Afternoon items without time
+      upcoming: sortedItems.filter(item => {
+        if (!item.time) return item.status !== 'completed';
         const itemHour = parseInt(item.time.split(':')[0]);
         return itemHour > currentHour + 1 && item.status !== 'completed';
       }),
-      completed: todayItems.filter(item => item.status === 'completed')
+      completed: sortedItems.filter(item => item.status === 'completed')
     };
 
     return groups;
@@ -146,6 +127,31 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
   const handleCompleteItem = async (itemId: string) => {
     // Update in task manager
     await taskManager.completeTask(itemId);
+  };
+
+  const handleQuickAdd = async () => {
+    const title = window.prompt('Enter task title:');
+    if (!title?.trim()) return;
+
+    try {
+      const taskData = {
+        id: `task_${Math.random().toString(36).substr(2, 8)}`,
+        title: title.trim(),
+        type: 'task' as const,
+        status: 'pending' as const,
+        priority: 'medium' as const,
+        contextId: contextId,
+        context: contextId as any,
+        createdBy: 'user',
+        source: 'manual' as const
+      };
+
+      await taskManager.createTask(taskData);
+      console.log('✅ Quick add task created successfully');
+    } catch (error) {
+      console.error('Error creating quick add task:', error);
+      alert('Failed to create task. Please try again.');
+    }
   };
 
   const getContextColor = (context: string) => {
@@ -168,33 +174,20 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
 
   const groups = groupItemsByTime();
 
-  // Mock SOP data for tooltips
-  const getSOPData = (itemId: string) => {
+  // Get tooltip data for items
+  const getTooltipData = (item: TodayItem) => {
     return {
-      id: itemId,
-      name: 'Sunday Planning Routine',
-      estimatedDuration: 15,
-      assignedTo: 'You',
-      steps: [
-        {
-          id: 'step1',
-          stepNumber: 1,
-          title: 'Review completed tasks',
-          description: 'Check off finished items from the week',
-          estimatedDuration: 5,
-          isOptional: false,
-          type: 'standard' as const
-        },
-        {
-          id: 'step2',
-          stepNumber: 2,
-          title: 'Plan next week priorities',
-          description: 'Identify top 3 goals for the upcoming week',
-          estimatedDuration: 10,
-          isOptional: false,
-          type: 'standard' as const
-        }
-      ]
+      id: item.id,
+      name: item.title,
+      estimatedDuration: item.duration || 30,
+      assignedTo: item.assignedTo || 'You',
+      context: item.context,
+      priority: item.priority,
+      notes: item.notes,
+      type: item.type,
+      time: item.time,
+      status: item.status,
+      parentTitle: item.parentTitle
     };
   };
 
@@ -244,33 +237,16 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
         </div>
         
         <div className="flex items-center space-x-3">
-          <button className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+          <button 
+            onClick={handleQuickAdd}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
             <PlusIcon className="w-4 h-4" />
             <span>Quick Add</span>
           </button>
         </div>
       </div>
 
-      {/* AI Insights */}
-      {aiInsights.length > 0 && (
-        <div className="mb-8 space-y-3">
-          {aiInsights.map((insight) => (
-            <div key={insight.id} className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
-                <SparklesIcon className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-amber-800 text-sm">{insight.message}</p>
-                  {insight.actionable && (
-                    <button className="text-amber-600 text-xs font-medium mt-2 hover:text-amber-700">
-                      Take action →
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Main Content */}
       <div className="space-y-8">
@@ -282,7 +258,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
               <ClockIcon className="w-5 h-5 mr-2" />
               Overdue
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {groups.overdue.map((item) => (
                 <TodayItemCard
                   key={item.id}
@@ -291,7 +267,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
                   onItemClick={handleItemClick}
                   getContextColor={getContextColor}
                   getPriorityIcon={getPriorityIcon}
-                  getSOPData={getSOPData}
+                  getTooltipData={getTooltipData}
                 />
               ))}
             </div>
@@ -305,7 +281,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
               <ArrowRightIcon className="w-5 h-5 mr-2 text-blue-600" />
               Now
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {groups.current.map((item) => (
                 <TodayItemCard
                   key={item.id}
@@ -314,7 +290,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
                   onItemClick={handleItemClick}
                   getContextColor={getContextColor}
                   getPriorityIcon={getPriorityIcon}
-                  getSOPData={getSOPData}
+                  getTooltipData={getTooltipData}
                   highlighted={true}
                 />
               ))}
@@ -329,7 +305,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
               <CalendarIcon className="w-5 h-5 mr-2" />
               Coming Up
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {groups.upcoming.map((item) => (
                 <TodayItemCard
                   key={item.id}
@@ -338,7 +314,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
                   onItemClick={handleItemClick}
                   getContextColor={getContextColor}
                   getPriorityIcon={getPriorityIcon}
-                  getSOPData={getSOPData}
+                  getTooltipData={getTooltipData}
                 />
               ))}
             </div>
@@ -362,7 +338,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
             </button>
             
             {showCompleted && (
-              <div className="space-y-3 opacity-60">
+              <div className="space-y-2 opacity-60">
                 {groups.completed.map((item) => (
                   <TodayItemCard
                     key={item.id}
@@ -371,7 +347,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
                     onItemClick={handleItemClick}
                     getContextColor={getContextColor}
                     getPriorityIcon={getPriorityIcon}
-                    getSOPData={getSOPData}
+                    getTooltipData={getTooltipData}
                     completed={true}
                   />
                 ))}
@@ -388,8 +364,6 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
         event={selectedItem}
       />
 
-      {/* Debug Info - Remove this in production */}
-      <TaskDebugger contextId={contextId} />
     </div>
   );
 };
@@ -401,7 +375,7 @@ interface TodayItemCardProps {
   onItemClick: (item: TodayItem) => void;
   getContextColor: (context: string) => string;
   getPriorityIcon: (priority: string) => string;
-  getSOPData: (itemId: string) => any;
+  getTooltipData: (item: TodayItem) => any;
   highlighted?: boolean;
   completed?: boolean;
 }
@@ -412,27 +386,41 @@ const TodayItemCard: React.FC<TodayItemCardProps> = ({
   onItemClick,
   getContextColor, 
   getPriorityIcon,
-  getSOPData,
+  getTooltipData,
   highlighted = false,
   completed = false
 }) => {
+  // Determine SOP relationship for visual grouping
+  const isSOPContainer = item.tags?.includes('sop-container');
+  const isSOPStep = item.tags?.includes('sop-step');
+  const containerTag = item.tags?.find((tag: string) => tag.startsWith('container:'));
+  const containerId = containerTag ? containerTag.split(':')[1] : null;
+  
+  // Get container name for step cards
+  const containerName = isSOPStep && containerId ? (() => {
+    const containerTask = taskManager.getTask(containerId);
+    return containerTask?.title?.replace('📋 ', '') || 'SOP';
+  })() : null;
+  
   const cardClasses = `
-    bg-white border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer
+    bg-white border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer
     ${highlighted ? 'border-blue-300 shadow-md' : 'border-gray-200'}
     ${completed ? 'opacity-60' : ''}
+    ${isSOPContainer ? 'border-l-4 border-l-purple-500 bg-purple-50' : ''}
+    ${isSOPStep ? 'border-l-4 border-l-purple-300 ml-2' : ''}
   `;
 
   const cardContent = (
     <div className={cardClasses} onClick={() => onItemClick(item)}>
       <div className="flex items-start justify-between">
-        <div className="flex items-start space-x-3 flex-1">
+        <div className="flex items-center space-x-3 flex-1">
           {/* Completion checkbox */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               onComplete(item.id);
             }}
-            className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
               item.status === 'completed'
                 ? 'bg-green-500 border-green-500 text-white'
                 : 'border-gray-300 hover:border-green-400'
@@ -443,39 +431,47 @@ const TodayItemCard: React.FC<TodayItemCardProps> = ({
 
           {/* Item content */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-2 mb-1">
-              <h3 className={`font-medium ${completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                {getPriorityIcon(item.priority)} {item.title}
-              </h3>
-              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getContextColor(item.context)}`}>
-                {item.context}
-              </span>
-            </div>
-            
-            {item.parentTitle && (
-              <p className="text-sm text-gray-600 mb-1">
-                Part of: {item.parentTitle}
-              </p>
-            )}
-            
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
-              {item.time && (
-                <span className="flex items-center">
-                  <ClockIcon className="w-4 h-4 mr-1" />
-                  {item.time}
-                  {item.duration && ` (${item.duration}m)`}
-                </span>
-              )}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <h3 className={`font-medium text-sm ${completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                  {getPriorityIcon(item.priority)} {item.title}
+                </h3>
+                {isSOPStep && containerName && (
+                  <span className="text-xs text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">
+                    {containerName}
+                  </span>
+                )}
+                {item.parentTitle && !isSOPStep && (
+                  <span className="text-xs text-gray-500">
+                    • {item.parentTitle}
+                  </span>
+                )}
+              </div>
               
-              {item.assignedTo && (
-                <span className="flex items-center">
-                  <UserIcon className="w-4 h-4 mr-1" />
-                  {item.assignedTo}
+              <div className="flex items-center space-x-2 text-xs">
+                <span className={`px-2 py-1 rounded-full font-medium ${getContextColor(item.context)}`}>
+                  {item.context}
                 </span>
-              )}
+                
+                {item.time && (
+                  <span className="flex items-center text-gray-500">
+                    <ClockIcon className="w-3 h-3 mr-1" />
+                    {item.time}
+                    {item.duration && ` (${item.duration}m)`}
+                  </span>
+                )}
+                
+                {item.assignedTo && (
+                  <span className="flex items-center text-gray-500">
+                    <UserIcon className="w-3 h-3 mr-1" />
+                    {item.assignedTo}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
+
 
         {/* Actions menu */}
         <button 
@@ -488,17 +484,48 @@ const TodayItemCard: React.FC<TodayItemCardProps> = ({
     </div>
   );
 
-  // Wrap SOP items with tooltip
-  if (item.type === 'sop') {
-    return (
-      <SOPTooltip
-        sopData={getSOPData(item.id)}
-        placement="right"
-      >
-        {cardContent}
-      </SOPTooltip>
-    );
-  }
-
-  return cardContent;
+  // Wrap all items with tooltip showing relevant information
+  return (
+    <div className="relative group">
+      {cardContent}
+      
+      {/* Custom tooltip */}
+      <div className="absolute left-full top-0 ml-3 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+        <div className="space-y-2">
+          <div className="font-medium">{item.title}</div>
+          
+          {item.time && (
+            <div className="text-gray-300">
+              ⏰ {item.time}{item.duration && ` (${item.duration}m)`}
+            </div>
+          )}
+          
+          {item.assignedTo && (
+            <div className="text-gray-300">
+              👤 {item.assignedTo}
+            </div>
+          )}
+          
+          <div className="text-gray-300">
+            📁 {item.context} • {item.priority} priority
+          </div>
+          
+          {item.parentTitle && (
+            <div className="text-gray-300">
+              📋 Part of: {item.parentTitle}
+            </div>
+          )}
+          
+          {item.notes && (
+            <div className="text-gray-300 border-t border-gray-700 pt-2 mt-2">
+              {item.notes}
+            </div>
+          )}
+        </div>
+        
+        {/* Arrow */}
+        <div className="absolute right-full top-3 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900"></div>
+      </div>
+    </div>
+  );
 };

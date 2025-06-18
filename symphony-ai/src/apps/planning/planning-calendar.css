@@ -134,6 +134,85 @@
   line-height: 1.2;
 }
 
+/* SOP Container and Step Styling */
+.fc-event-sop-container {
+  background-color: #8b5cf6 !important;
+  border: 2px solid #7c3aed !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3) !important;
+}
+
+.fc-event-sop-container::before {
+  content: '📋';
+  margin-right: 4px;
+}
+
+.fc-event-sop-step {
+  background-color: #a855f7 !important;
+  border: 1px solid #9333ea !important;
+  border-radius: 4px !important;
+  margin-left: 8px !important;
+  position: relative;
+  box-shadow: 0 1px 4px rgba(168, 85, 247, 0.2) !important;
+}
+
+.fc-event-sop-step::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 60%;
+  background-color: #7c3aed;
+  border-radius: 1px;
+}
+
+.fc-event-sop-step::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  background-color: #7c3aed;
+  border-radius: 50%;
+}
+
+/* Hover effects for SOP containers and steps */
+.fc-event-sop-container:hover {
+  background-color: #7c3aed !important;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+.fc-event-sop-step:hover {
+  background-color: #9333ea !important;
+  box-shadow: 0 2px 6px rgba(168, 85, 247, 0.3) !important;
+  transform: translateY(-1px);
+}
+
+/* Visual grouping for steps belonging to the same container */
+.fc-event[class*="fc-event-container-"] {
+  position: relative;
+}
+
+/* Add subtle connecting lines between related SOP steps */
+.fc-timegrid-event[class*="fc-event-container-"]::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  background: linear-gradient(to bottom, #7c3aed, #a855f7);
+  border-radius: 1px;
+  opacity: 0.6;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .fc-event-title {
@@ -146,5 +225,14 @@
   
   .fc-timegrid-slot {
     height: 35px;
+  }
+  
+  .fc-event-sop-step {
+    margin-left: 4px !important;
+  }
+  
+  .fc-event-sop-step::before {
+    left: -4px;
+    width: 1px;
   }
 }

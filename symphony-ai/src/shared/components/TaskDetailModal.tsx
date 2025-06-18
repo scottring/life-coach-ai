@@ -8,7 +8,10 @@ import {
   PencilIcon,
   TrashIcon,
   ShareIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  ListBulletIcon,
+  PlusIcon,
+  CheckIcon
 } from '@heroicons/react/24/outline';
 import { taskManager } from '../services/taskManagerService';
 import { contextService } from '../services/contextService';
@@ -45,6 +48,18 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
   const [newSubStepDescription, setNewSubStepDescription] = useState('');
   const [contextMembers, setContextMembers] = useState<ContextMember[]>([]);
   const [selectedAssignee, setSelectedAssignee] = useState('');
+  
+  // List management state
+  const [isAddingList, setIsAddingList] = useState(false);
+  const [newListTitle, setNewListTitle] = useState('');
+  const [newListType, setNewListType] = useState<'supplies' | 'ingredients' | 'checklist' | 'notes' | 'custom'>('supplies');
+  const [addingItemToList, setAddingItemToList] = useState<string | null>(null);
+  const [newItemText, setNewItemText] = useState('');
+  const [newItemQuantity, setNewItemQuantity] = useState('');
+
+  // Get the actual task from task manager with reactive updates
+  const [task, setTask] = useState(() => event?.id ? taskManager.getTask(event.id) : undefined);
+  const currentNotes = task?.notes || '';
 
   // Load context members when modal opens
   useEffect(() => {
@@ -62,11 +77,32 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
     loadContextMembers();
   }, [contextId, isOpen]);
 
-  if (!isOpen || !event) return null;
+  // Update task data when event changes or when we need to refresh
+  useEffect(() => {
+    if (event?.id) {
+      const updatedTask = taskManager.getTask(event.id);
+      setTask(updatedTask);
+    }
+  }, [event?.id]);
 
-  // Get the actual task from task manager for full data
-  const task = taskManager.getTask(event.id);
-  const currentNotes = task?.notes || '';
+  // Subscribe to task changes
+  useEffect(() => {
+    if (!event?.id) return;
+
+    const handleTaskUpdate = () => {
+      const updatedTask = taskManager.getTask(event.id);
+      setTask(updatedTask);
+    };
+
+    // Subscribe to task manager updates
+    const unsubscribe = taskManager.subscribe(handleTaskUpdate);
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [event?.id]);
+
+  if (!isOpen || !event) return null;
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', { 
@@ -220,6 +256,82 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
     if (window.confirm('Are you sure you want to delete this sub-step?')) {
       await taskManager.deleteSubStep(event.id, subStepId);
     }
+  };
+
+  const handleAssignSubStep = async (subStepId: string, assignedTo: string) => {
+    await taskManager.updateSubStep(event.id, subStepId, { assignedTo: assignedTo || undefined });
+  };
+
+  // List management handlers
+  const handleAddList = async () => {
+    if (!newListTitle.trim()) return;
+    
+    try {
+      await taskManager.addList(event.id, {
+        title: newListTitle.trim(),
+        type: newListType
+      });
+      
+      console.log('List added successfully');
+      
+      // Force refresh task data
+      const updatedTask = taskManager.getTask(event.id);
+      setTask(updatedTask);
+      
+      setNewListTitle('');
+      setIsAddingList(false); 
+    } catch (error) {
+      console.error('Error adding list:', error);
+      alert('Failed to add list. Please try again.');
+    }
+  };
+
+  const handleDeleteList = async (listId: string) => {
+    if (window.confirm('Are you sure you want to delete this list?')) {
+      await taskManager.deleteList(event.id, listId);
+      
+      // Force refresh task data
+      const updatedTask = taskManager.getTask(event.id);
+      setTask(updatedTask);
+    }
+  };
+
+  const handleAddListItem = async (listId: string) => {
+    if (!newItemText.trim()) return;
+    
+    try {
+      await taskManager.addListItem(event.id, listId, {
+        text: newItemText.trim(),
+        quantity: newItemQuantity.trim() || undefined
+      });
+      
+      // Force refresh task data
+      const updatedTask = taskManager.getTask(event.id);
+      setTask(updatedTask);
+      
+      setNewItemText('');
+      setNewItemQuantity('');
+      setAddingItemToList(null);
+    } catch (error) {
+      console.error('Error adding list item:', error);
+      alert('Failed to add item. Please try again.');
+    }
+  };
+
+  const handleToggleListItem = async (listId: string, itemId: string, isChecked: boolean) => {
+    await taskManager.updateListItem(event.id, listId, itemId, { isChecked });
+    
+    // Force refresh task data
+    const updatedTask = taskManager.getTask(event.id);
+    setTask(updatedTask);
+  };
+
+  const handleDeleteListItem = async (listId: string, itemId: string) => {
+    await taskManager.deleteListItem(event.id, listId, itemId);
+    
+    // Force refresh task data
+    const updatedTask = taskManager.getTask(event.id);
+    setTask(updatedTask);
   };
 
   const handleStartSharing = () => {
@@ -530,12 +642,32 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
                         className="mt-1 rounded focus:ring-blue-500"
                       />
                       <div className="flex-1">
-                        <p className={`text-sm font-medium ${subStep.isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
-                          {subStep.title}
-                        </p>
-                        {subStep.description && (
-                          <p className="text-xs text-gray-600 mt-1">{subStep.description}</p>
-                        )}
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className={`text-sm font-medium ${subStep.isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                              {subStep.title}
+                            </p>
+                            {subStep.description && (
+                              <p className="text-xs text-gray-600 mt-1">{subStep.description}</p>
+                            )}
+                          </div>
+                          
+                          {/* Individual step assignment */}
+                          <div className="ml-3 min-w-0 flex-shrink-0">
+                            <select
+                              value={subStep.assignedTo || ''}
+                              onChange={(e) => handleAssignSubStep(subStep.id, e.target.value)}
+                              className="text-xs border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                            >
+                              <option value="">Unassigned</option>
+                              {contextMembers.map((member) => (
+                                <option key={member.id} value={member.id}>
+                                  {member.displayName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                       </div>
                       <button
                         onClick={() => handleDeleteSubStep(subStep.id)}
@@ -554,6 +686,170 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ isOpen, onClos
               </div>
             </div>
           )}
+
+          {/* Lists Section */}
+          <div className="space-y-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                <ListBulletIcon className="w-5 h-5 mr-2" />
+                Lists
+              </h3>
+              <button
+                onClick={() => setIsAddingList(true)}
+                className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-sm"
+              >
+                <PlusIcon className="w-4 h-4" />
+                <span>Add List</span>
+              </button>
+            </div>
+
+            {/* Add New List Form */}
+            {isAddingList && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      List Title
+                    </label>
+                    <input
+                      type="text"
+                      value={newListTitle}
+                      onChange={(e) => setNewListTitle(e.target.value)}
+                      placeholder="e.g., Supplies needed, Ingredients, Tools..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      List Type
+                    </label>
+                    <select
+                      value={newListType}
+                      onChange={(e) => setNewListType(e.target.value as any)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="supplies">Supplies</option>
+                      <option value="ingredients">Ingredients</option>
+                      <option value="checklist">Checklist</option>
+                      <option value="notes">Notes</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleAddList}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                    >
+                      Add List
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsAddingList(false);
+                        setNewListTitle('');
+                      }}
+                      className="px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Existing Lists */}
+            {/* Debug: Task lists count: {task?.lists?.length || 0} */}
+            {task?.lists && task.lists.length > 0 ? (
+              <div className="space-y-4">
+                {task.lists.map((list) => (
+                  <div key={list.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        <h4 className="font-medium text-gray-900">{list.title}</h4>
+                        <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
+                          {list.type}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteList(list.id)}
+                        className="text-gray-400 hover:text-red-600"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* List Items */}
+                    <div className="space-y-2">
+                      {list.items.map((item) => (
+                        <div key={item.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={item.isChecked || false}
+                            onChange={(e) => handleToggleListItem(list.id, item.id, e.target.checked)}
+                            className="rounded focus:ring-blue-500"
+                          />
+                          <span className={`flex-1 text-sm ${item.isChecked ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                            {item.quantity && <span className="font-medium">{item.quantity} </span>}
+                            {item.text}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteListItem(list.id, item.id)}
+                            className="text-gray-400 hover:text-red-600"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Add Item Form */}
+                      {addingItemToList === list.id ? (
+                        <div className="flex space-x-2 mt-3">
+                          <input
+                            type="text"
+                            value={newItemQuantity}
+                            onChange={(e) => setNewItemQuantity(e.target.value)}
+                            placeholder="Qty"
+                            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={newItemText}
+                            onChange={(e) => setNewItemText(e.target.value)}
+                            placeholder="Add item..."
+                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                          <button
+                            onClick={() => handleAddListItem(list.id)}
+                            className="px-2 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                          >
+                            Add
+                          </button>
+                          <button
+                            onClick={() => setAddingItemToList(null)}
+                            className="px-2 py-1 border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setAddingItemToList(list.id)}
+                          className="text-blue-600 hover:text-blue-700 text-sm flex items-center space-x-1 mt-2"
+                        >
+                          <PlusIcon className="w-3 h-3" />
+                          <span>Add item</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : !isAddingList ? (
+              <div className="text-center py-4 text-gray-500">
+                <p className="text-sm">No lists added yet</p>
+                <p className="text-xs text-gray-400">Add supplies, ingredients, or checklists to this task</p>
+              </div>
+            ) : null}
+          </div>
 
           {/* Quick Actions */}
           <div className="flex items-center space-x-3 pt-4 border-t border-gray-200">

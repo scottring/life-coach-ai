@@ -11,12 +11,19 @@ import {
   ArrowLeftIcon,
   ClockIcon,
   UserGroupIcon,
-  Squares2X2Icon
+  Squares2X2Icon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  InboxIcon,
+  ClipboardDocumentListIcon,
+  FolderIcon,
+  FlagIcon
 } from '@heroicons/react/24/outline';
 import { TaskDetailModal } from '../../shared/components/TaskDetailModal';
 import { SOPTooltip } from '../../shared/components/SOPTooltip';
 import { taskManager, UniversalTask } from '../../shared/services/taskManagerService';
 import { sopService } from '../../shared/services/sopService';
+import { goalService } from '../../shared/services/goalService';
 import './planning-calendar.css';
 
 interface PlanningViewProps {
@@ -63,6 +70,23 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [currentView, setCurrentView] = useState('timeGridWeek');
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  
+  // Sidebar sections data
+  const [sidebarData, setSidebarData] = useState({
+    inbox: [] as SchedulableItem[],
+    sops: [] as any[],
+    projects: [] as any[],
+    goals: [] as any[]
+  });
+  
+  // Sidebar section expanded states
+  const [expandedSections, setExpandedSections] = useState({
+    inbox: true,
+    sops: false,
+    projects: false,
+    goals: false
+  });
 
   // Initialize draggable functionality
   useEffect(() => {
@@ -94,26 +118,46 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
     };
   }, [unscheduledItems]);
 
-  // Load tasks from task manager
+  // Load all planning data including sidebar sections
   useEffect(() => {
-    const loadPlanningData = () => {
+    const loadPlanningData = async () => {
       try {
         console.log(`🔍 Loading planning data for contextId: ${contextId}`);
-        // Get unscheduled tasks
+        
+        // Get unscheduled tasks for inbox
         const unscheduledTasks = taskManager.getUnscheduledTasks(contextId);
         console.log(`🚀 Got ${unscheduledTasks.length} unscheduled tasks from taskManager`);
-        const unscheduledItems: SchedulableItem[] = unscheduledTasks.map(task => ({
-          id: task.id,
-          title: task.title,
-          type: task.type,
-          status: task.status,
-          context: task.context,
-          priority: task.priority,
-          duration: task.duration,
-          assignedTo: task.assignedTo,
-          scheduledDate: task.scheduledDate,
-          scheduledTime: task.scheduledTime
-        }));
+        
+        // Convert to inbox items (only standalone tasks, not SOP/project/goal derived)
+        const inboxItems: SchedulableItem[] = unscheduledTasks
+          .filter(task => task.source === 'manual' || task.type === 'task')
+          .map(task => ({
+            id: task.id,
+            title: task.title,
+            type: task.type,
+            status: task.status,
+            context: task.context,
+            priority: task.priority,
+            duration: task.duration,
+            assignedTo: task.assignedTo,
+            scheduledDate: task.scheduledDate,
+            scheduledTime: task.scheduledTime
+          }));
+
+        // Load SOPs, Projects, and Goals
+        const [sops, projects, goals] = await Promise.all([
+          sopService.getSOPsForContext(contextId),
+          goalService.getProjectsByContext(contextId),
+          goalService.getGoalsByContext(contextId)
+        ]);
+
+        // Update sidebar data
+        setSidebarData({
+          inbox: inboxItems,
+          sops: sops || [],
+          projects: projects || [],
+          goals: goals || []
+        });
 
         // Get scheduled tasks and convert to calendar events
         const scheduledTasks = taskManager.getScheduledTasks(contextId);
@@ -151,7 +195,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
             };
           });
 
-        setUnscheduledItems(unscheduledItems);
+        setUnscheduledItems(inboxItems); // Keep for drag/drop compatibility
         setCalendarEvents(calendarEvents);
         setLoading(false);
       } catch (error) {
@@ -164,7 +208,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
     const loadWithRetry = async () => {
       try {
         await taskManager.loadTasks(contextId);
-        loadPlanningData();
+        await loadPlanningData();
       } catch (error) {
         console.log('⏳ Retrying task load in 2 seconds...');
         setTimeout(loadWithRetry, 2000);
@@ -175,7 +219,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
 
     // Subscribe to real-time updates
     const unsubscribeFirestore = taskManager.subscribeToTasks(contextId);
-    const unsubscribeLocal = taskManager.subscribe(loadPlanningData);
+    const unsubscribeLocal = taskManager.subscribe(() => loadPlanningData());
     
     return () => {
       unsubscribeFirestore();
@@ -276,71 +320,103 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
     }
   };
 
-  const handleImportSOPSteps = async () => {
+  const handleQuickAdd = async () => {
+    const title = window.prompt('Enter task title:');
+    if (!title?.trim()) return;
+
     try {
-      console.log(`🔄 Starting SOP import for contextId: ${contextId}`);
-      // Get all SOPs for the context
-      const sops = await sopService.getSOPsForContext(contextId);
-      
-      if (sops.length === 0) {
-        alert('No SOPs found to import steps from.');
-        return;
-      }
+      const taskData = {
+        id: `task_${Math.random().toString(36).substr(2, 8)}`,
+        title: title.trim(),
+        type: 'task' as const,
+        status: 'pending' as const,
+        priority: 'medium' as const,
+        contextId: contextId,
+        context: contextId as any,
+        createdBy: 'user',
+        source: 'manual' as const
+      };
 
-      // Show selection dialog
-      const sopNames = sops.map(sop => `${sop.name} (${sop.steps?.length || 0} steps)`);
-      const selectedIndex = window.prompt(
-        `Select SOP to import steps from:\n${sopNames.map((name, i) => `${i + 1}. ${name}`).join('\n')}\n\nEnter number (1-${sops.length}):`
-      );
-
-      if (!selectedIndex || isNaN(Number(selectedIndex))) return;
-      
-      const sopIndex = Number(selectedIndex) - 1;
-      if (sopIndex < 0 || sopIndex >= sops.length) return;
-
-      const selectedSOP = sops[sopIndex];
-      if (!selectedSOP.steps || selectedSOP.steps.length === 0) {
-        alert('Selected SOP has no steps to import.');
-        return;
-      }
-
-      // Create tasks for each step
-      for (const step of selectedSOP.steps) {
-        const taskData = {
-          id: `sop_${Math.random().toString(36).substr(2, 8)}`,
-          title: step.title,
-          description: step.description,
-          type: 'sop' as const,
-          status: 'pending' as const,
-          priority: 'medium' as const,
-          contextId: contextId,
-          context: contextId as any,
-          duration: step.estimatedDuration || 30,
-          assignedTo: selectedSOP.defaultAssignee,
-          createdBy: selectedSOP.createdBy,
-          source: 'import' as const,
-          parentId: selectedSOP.id,
-          parentTitle: selectedSOP.name
-        };
-
-        await taskManager.createTask(taskData);
-      }
-
-      console.log(`✅ Imported ${selectedSOP.steps.length} steps from SOP: ${selectedSOP.name}`);
-      console.log(`📋 Tasks created with contextId: ${contextId}`);
-      
-      // Debug: Check tasks immediately after import
-      setTimeout(() => {
-        console.log('🔍 Checking unscheduled tasks immediately after import...');
-        const unscheduledTasks = taskManager.getUnscheduledTasks(contextId);
-        console.log('📋 Unscheduled tasks after import:', unscheduledTasks.length);
-      }, 100);
-      
-      alert(`Successfully imported ${selectedSOP.steps.length} tasks from "${selectedSOP.name}"`);
+      await taskManager.createTask(taskData);
+      console.log('✅ Quick add task created successfully');
     } catch (error) {
-      console.error('Error importing SOP steps:', error);
-      alert('Failed to import SOP steps. Please try again.');
+      console.error('Error creating quick add task:', error);
+      alert('Failed to create task. Please try again.');
     }
+  };
+
+  // Toggle section expansion
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  // Create a task from SOP step by dragging
+  const createTaskFromSOPStep = async (sop: any, step: any) => {
+    const taskData = {
+      id: `sop_${Math.random().toString(36).substr(2, 8)}`,
+      title: step.title,
+      description: step.description,
+      type: 'sop' as const,
+      status: 'pending' as const,
+      priority: 'medium' as const,
+      contextId: contextId,
+      context: contextId as any,
+      duration: step.estimatedDuration || 30,
+      assignedTo: sop.defaultAssignee,
+      createdBy: sop.createdBy,
+      source: 'import' as const,
+      parentId: sop.id,
+      parentTitle: sop.name
+    };
+
+    return await taskManager.createTask(taskData);
+  };
+
+  // Create a task from project task by dragging
+  const createTaskFromProjectTask = async (project: any, task: any) => {
+    const taskData = {
+      id: `project_${Math.random().toString(36).substr(2, 8)}`,
+      title: task.title,
+      description: task.description,
+      type: 'project' as const,
+      status: 'pending' as const,
+      priority: task.priority as any,
+      contextId: contextId,
+      context: contextId as any,
+      duration: task.estimatedDuration || 30,
+      assignedTo: task.assignedTo,
+      createdBy: project.createdBy,
+      source: 'import' as const,
+      parentId: project.id,
+      parentTitle: project.title
+    };
+
+    return await taskManager.createTask(taskData);
+  };
+
+  // Create a task from goal task by dragging
+  const createTaskFromGoalTask = async (goal: any, task: any) => {
+    const taskData = {
+      id: `goal_${Math.random().toString(36).substr(2, 8)}`,
+      title: task.title,
+      description: task.description,
+      type: 'task' as const,
+      status: 'pending' as const,
+      priority: task.priority as any,
+      contextId: contextId,
+      context: contextId as any,
+      duration: task.estimatedDuration || 30,
+      assignedTo: task.assignedTo,
+      createdBy: goal.createdBy,
+      source: 'import' as const,
+      parentId: goal.id,
+      parentTitle: goal.title
+    };
+
+    return await taskManager.createTask(taskData);
   };
 
   const getContextColor = (context: string) => {
@@ -413,7 +489,10 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
             <span>Filters</span>
           </button>
           
-          <button className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+          <button 
+            onClick={handleQuickAdd}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
             <PlusIcon className="w-4 h-4" />
             <span>Quick Add</span>
           </button>
@@ -421,89 +500,298 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar - Unscheduled Items */}
+        {/* Sidebar - Expandable Sections */}
         <div className="lg:col-span-1">
           <div className="bg-white border border-gray-200 rounded-lg">
             <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-900 flex items-center">
-                  <UserGroupIcon className="w-5 h-5 mr-2" />
-                  Unscheduled Items
-                </h3>
-                <button
-                  onClick={handleImportSOPSteps}
-                  className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                  title="Import SOP steps as tasks"
-                >
-                  + SOP
-                </button>
-              </div>
+              <h3 className="font-medium text-gray-900 flex items-center">
+                <UserGroupIcon className="w-5 h-5 mr-2" />
+                Unscheduled Items
+              </h3>
               <p className="text-sm text-gray-500">Drag to schedule</p>
             </div>
             
-            <div id="unscheduled-container" className="p-4 space-y-3 max-h-96 overflow-y-auto">
-              {unscheduledItems.map((item) => (
-                <div
-                  key={item.id}
-                  draggable
-                  data-task-id={item.id}
-                  data-type={item.type}
-                  data-title={item.title}
-                  data-duration={item.duration}
-                  className={`draggable-task p-3 border border-gray-200 rounded-lg cursor-move hover:shadow-md transition-shadow bg-white ${getPriorityColor(item.priority)}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <span className="text-lg">{getTypeIcon(item.type)}</span>
-                        <h4 className="font-medium text-gray-900 text-sm truncate max-w-full">{item.title}</h4>
-                      </div>
-                      {item.parentTitle && getDisplayName(item.parentTitle) && (
-                        <p className="text-xs text-gray-500 mb-2">{getDisplayName(item.parentTitle)}</p>
-                      )}
-                      
-                      <div className="flex items-center space-x-3 text-xs text-gray-600">
-                        <div 
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: getContextColor(item.context) }}
-                        ></div>
-                        <span className="capitalize">{item.context}</span>
-                        {item.duration && (
-                          <>
-                            <span className="text-gray-400">•</span>
-                            <span className="flex items-center">
-                              <ClockIcon className="w-3 h-3 mr-1" />
-                              {item.duration}m
-                            </span>
-                          </>
-                        )}
-                        {getDisplayName(item.assignedTo) && (
-                          <>
-                            <span className="text-gray-400">•</span>
-                            <span>{getDisplayName(item.assignedTo)}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <button
-                      onClick={() => handleRemoveTask(item.id)}
-                      className="text-gray-400 hover:text-gray-600 text-xs"
-                      title="Remove task"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div id="unscheduled-container" className="max-h-96 overflow-y-auto">
               
-              {unscheduledItems.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <CalendarIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">All caught up!</p>
-                  <p className="text-xs">No unscheduled tasks</p>
-                </div>
-              )}
+              {/* Inbox Section */}
+              <div className="border-b border-gray-100">
+                <button
+                  onClick={() => toggleSection('inbox')}
+                  className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <InboxIcon className="w-4 h-4 text-blue-600" />
+                    <span className="font-medium text-gray-900">Inbox</span>
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                      {sidebarData.inbox.length}
+                    </span>
+                  </div>
+                  {expandedSections.inbox ? (
+                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
+                
+                {expandedSections.inbox && (
+                  <div className="px-3 pb-3 space-y-2">
+                    {sidebarData.inbox.map((item) => (
+                      <div
+                        key={item.id}
+                        draggable
+                        data-task-id={item.id}
+                        data-type={item.type}
+                        data-title={item.title}
+                        data-duration={item.duration}
+                        className={`draggable-task p-2 border border-gray-200 rounded-lg cursor-move hover:shadow-md transition-shadow bg-white ${getPriorityColor(item.priority)}`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <span className="text-sm">{getTypeIcon(item.type)}</span>
+                              <h4 className="font-medium text-gray-900 text-sm truncate">{item.title}</h4>
+                            </div>
+                            <div className="flex items-center space-x-2 text-xs text-gray-600">
+                              <div 
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: getContextColor(item.context) }}
+                              ></div>
+                              <span className="capitalize">{item.context}</span>
+                              {item.duration && (
+                                <>
+                                  <span className="text-gray-400">•</span>
+                                  <span>{item.duration}m</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveTask(item.id)}
+                            className="text-gray-400 hover:text-gray-600 text-xs"
+                            title="Remove task"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {sidebarData.inbox.length === 0 && (
+                      <div className="text-center py-4 text-gray-500">
+                        <InboxIcon className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                        <p className="text-xs">No tasks in inbox</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* SOPs Section */}
+              <div className="border-b border-gray-100">
+                <button
+                  onClick={() => toggleSection('sops')}
+                  className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <ClipboardDocumentListIcon className="w-4 h-4 text-purple-600" />
+                    <span className="font-medium text-gray-900">SOPs</span>
+                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+                      {sidebarData.sops.length}
+                    </span>
+                  </div>
+                  {expandedSections.sops ? (
+                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
+                
+                {expandedSections.sops && (
+                  <div className="px-3 pb-3 space-y-2">
+                    {sidebarData.sops.map((sop) => (
+                      <div key={sop.id} className="space-y-1">
+                        <h5 className="text-xs font-medium text-gray-700 px-2 py-1 bg-gray-50 rounded">
+                          {sop.name} ({sop.steps?.length || 0} steps)
+                        </h5>
+                        {sop.steps?.map((step: any, index: number) => (
+                          <div
+                            key={step.id}
+                            draggable
+                            data-sop-id={sop.id}
+                            data-step-id={step.id}
+                            data-title={step.title}
+                            data-duration={step.estimatedDuration || 30}
+                            className="draggable-task p-2 ml-2 border border-purple-200 rounded-lg cursor-move hover:shadow-md transition-shadow bg-purple-50"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs text-purple-600 font-mono">#{index + 1}</span>
+                              <span className="text-sm font-medium text-gray-900 truncate">{step.title}</span>
+                            </div>
+                            {step.estimatedDuration && (
+                              <div className="text-xs text-gray-600 mt-1">
+                                <ClockIcon className="w-3 h-3 inline mr-1" />
+                                {step.estimatedDuration}m
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    
+                    {sidebarData.sops.length === 0 && (
+                      <div className="text-center py-4 text-gray-500">
+                        <ClipboardDocumentListIcon className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                        <p className="text-xs">No SOPs available</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Projects Section */}
+              <div className="border-b border-gray-100">
+                <button
+                  onClick={() => toggleSection('projects')}
+                  className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <FolderIcon className="w-4 h-4 text-green-600" />
+                    <span className="font-medium text-gray-900">Projects</span>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                      {sidebarData.projects.length}
+                    </span>
+                  </div>
+                  {expandedSections.projects ? (
+                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
+                
+                {expandedSections.projects && (
+                  <div className="px-3 pb-3 space-y-2">
+                    {sidebarData.projects.map((project) => (
+                      <div key={project.id} className="space-y-1">
+                        <h5 className="text-xs font-medium text-gray-700 px-2 py-1 bg-gray-50 rounded">
+                          {project.title} ({project.tasks?.length || 0} tasks)
+                        </h5>
+                        {project.tasks?.map((task: any) => (
+                          <div
+                            key={task.id}
+                            draggable
+                            data-project-id={project.id}
+                            data-task-id={task.id}
+                            data-title={task.title}
+                            data-duration={task.estimatedDuration || 30}
+                            className="draggable-task p-2 ml-2 border border-green-200 rounded-lg cursor-move hover:shadow-md transition-shadow bg-green-50"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-medium text-gray-900 truncate">{task.title}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-xs text-gray-600 mt-1">
+                              {task.priority && (
+                                <span className={`px-1 py-0.5 rounded text-xs ${
+                                  task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                  task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {task.priority}
+                                </span>
+                              )}
+                              {task.estimatedDuration && (
+                                <>
+                                  <ClockIcon className="w-3 h-3" />
+                                  <span>{task.estimatedDuration}m</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    
+                    {sidebarData.projects.length === 0 && (
+                      <div className="text-center py-4 text-gray-500">
+                        <FolderIcon className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                        <p className="text-xs">No projects available</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Goals Section */}
+              <div>
+                <button
+                  onClick={() => toggleSection('goals')}
+                  className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <FlagIcon className="w-4 h-4 text-orange-600" />
+                    <span className="font-medium text-gray-900">Goals</span>
+                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
+                      {sidebarData.goals.length}
+                    </span>
+                  </div>
+                  {expandedSections.goals ? (
+                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
+                
+                {expandedSections.goals && (
+                  <div className="px-3 pb-3 space-y-2">
+                    {sidebarData.goals.map((goal) => (
+                      <div key={goal.id} className="space-y-1">
+                        <h5 className="text-xs font-medium text-gray-700 px-2 py-1 bg-gray-50 rounded">
+                          {goal.title} ({goal.tasks?.length || 0} tasks)
+                        </h5>
+                        {goal.tasks?.map((task: any) => (
+                          <div
+                            key={task.id}
+                            draggable
+                            data-goal-id={goal.id}
+                            data-task-id={task.id}
+                            data-title={task.title}
+                            data-duration={task.estimatedDuration || 30}
+                            className="draggable-task p-2 ml-2 border border-orange-200 rounded-lg cursor-move hover:shadow-md transition-shadow bg-orange-50"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-medium text-gray-900 truncate">{task.title}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-xs text-gray-600 mt-1">
+                              {task.priority && (
+                                <span className={`px-1 py-0.5 rounded text-xs ${
+                                  task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                  task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {task.priority}
+                                </span>
+                              )}
+                              {task.estimatedDuration && (
+                                <>
+                                  <ClockIcon className="w-3 h-3" />
+                                  <span>{task.estimatedDuration}m</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    
+                    {sidebarData.goals.length === 0 && (
+                      <div className="text-center py-4 text-gray-500">
+                        <FlagIcon className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                        <p className="text-xs">No goals available</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
             </div>
           </div>
         </div>

@@ -146,6 +146,100 @@ export interface GoalMetrics {
   priorityBreakdown: Record<GoalPriority, number>;
 }
 
+// Weekly Planning Types (based on goal-todo approach)
+export type TaskReviewAction = 'mark_completed' | 'push_forward' | 'mark_missed' | 'archive' | 'close';
+export type TaskReviewStatus = 'completed' | 'missed' | 'needs_review' | 'pushed_forward';
+export type WeeklySessionStatus = 'not_started' | 'review_phase' | 'planning_phase' | 'completed';
+
+export interface TaskReviewItem {
+  taskId: string;
+  title: string;
+  status: TaskReviewStatus;
+  originalDueDate: string;
+  priority: GoalPriority;
+  action?: TaskReviewAction;
+  completedDate?: string;
+  goalId?: string;
+  goalName?: string;
+}
+
+export interface UnscheduledItem {
+  id: string;
+  type: 'task' | 'routine' | 'milestone';
+  title: string;
+  description?: string;
+  goalId?: string;
+  goalName?: string;
+  priority?: GoalPriority;
+  suggestedDate?: string;
+}
+
+export interface NextWeekTask {
+  taskId: string;
+  priority: GoalPriority;
+  dueDate: string;
+  timeSlot?: {
+    start: string;
+    end: string;
+  };
+}
+
+export interface CalendarEvent {
+  eventId: string;
+  taskId: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface LongTermGoalReview {
+  goalId: string;
+  madeProgress: boolean;
+  adjustments?: string;
+  nextReviewDate?: string;
+}
+
+export interface SharedGoalReview {
+  goalId: string;
+  completedTasks: string[];
+  pendingTasks: string[];
+  assignedTasks: { taskId: string; userId: string }[];
+}
+
+export interface WeeklyPlanningSession {
+  id: string;
+  ownerId: string;
+  contextId: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  status: WeeklySessionStatus;
+  createdAt: string;
+  updatedAt: string;
+  
+  reviewPhase: {
+    taskReviews: TaskReviewItem[];
+    longTermGoalReviews: LongTermGoalReview[];
+    sharedGoalReviews: SharedGoalReview[];
+    summary: {
+      totalCompleted: number;
+      totalPushedForward: number;
+      totalMissed: number;
+      totalArchived: number;
+      totalClosed: number;
+    };
+  };
+  
+  planningPhase: {
+    nextWeekTasks: NextWeekTask[];
+    recurringTasks: any[]; // TODO: Define proper type
+    sharedGoalAssignments: any[]; // TODO: Define proper type
+    calendarSyncStatus: {
+      synced: boolean;
+      syncedEvents: CalendarEvent[];
+      lastSyncedAt?: string;
+    };
+  };
+}
+
 // For drag and drop integration with calendar
 export interface SchedulableItem {
   id: string;

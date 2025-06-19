@@ -38,6 +38,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
   const [loading, setLoading] = useState(true);
   const [showCompleted, setShowCompleted] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Load today's tasks from task manager
   useEffect(() => {
@@ -84,14 +85,83 @@ export const TodayView: React.FC<TodayViewProps> = ({ contextId, userId }) => {
     };
   }, [contextId]);
 
+  // Timer to automatically refresh and hide expired SOP steps
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000); // Update every 30 seconds
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Helper function to check if SOP step should be hidden
+  const shouldHideSOPStep = (item: TodayItem): boolean => {
+    // Only apply to SOP steps
+    if (item.type !== 'sop' || !item.tags?.includes('sop-step')) {
+      return false;
+    }
+    
+    // Need both time and duration to calculate end time
+    if (!item.time || !item.duration) {
+      return false;
+    }
+    
+    const now = currentTime;
+    
+    // Parse the scheduled time (format: "HH:MM")
+    const [hours, minutes] = item.time.split(':').map(Number);
+    const scheduledStart = new Date();
+    scheduledStart.setHours(hours, minutes, 0, 0);
+    
+    // Calculate end time
+    const scheduledEnd = new Date(scheduledStart.getTime() + item.duration * 60000);
+    
+    // Add 20% buffer to duration
+    const bufferMs = item.duration * 60000 * 0.2; // 20% of duration in milliseconds
+    const endWithBuffer = new Date(scheduledEnd.getTime() + bufferMs);
+    
+    // Hide if current time is past end time + buffer
+    return now > endWithBuffer;
+  };
+
   // Group items by time with simple sorting
   const groupItemsByTime = () => {
     const now = new Date();
     const currentHour = now.getHours();
     
-    // Simple sorting by time, then by title
-    const sortedItems = [...todayItems].sort((a, b) => {
-      // Sort by time first
+    // Filter out SOP steps that should be hidden based on time
+    const filteredItems = todayItems.filter(item => !shouldHideSOPStep(item));
+    
+    // Sort with SOP hierarchy in mind
+    const sortedItems = [...filteredItems].sort((a, b) => {
+      const aIsSOPContainer = a.tags?.includes('sop-container');
+      const bIsSOPContainer = b.tags?.includes('sop-container');
+      const aIsSOPStep = a.tags?.includes('sop-step');
+      const bIsSOPStep = b.tags?.includes('sop-step');
+      
+      // Get container IDs for steps
+      const aContainerTag = a.tags?.find(tag => tag.startsWith('container:'));
+      const bContainerTag = b.tags?.find(tag => tag.startsWith('container:'));
+      const aContainerId = aContainerTag ? aContainerTag.split(':')[1] : null;
+      const bContainerId = bContainerTag ? bContainerTag.split(':')[1] : null;
+      
+      // If both are from the same SOP, container comes first, then steps by time
+      if (aIsSOPContainer && bIsSOPStep && bContainerId === a.id) {
+        return -1; // Container before its steps
+      }
+      if (bIsSOPContainer && aIsSOPStep && aContainerId === b.id) {
+        return 1; // Container before its steps
+      }
+      
+      // If both are steps from the same container, sort by time
+      if (aIsSOPStep && bIsSOPStep && aContainerId === bContainerId) {
+        if (a.time && b.time) {
+          return a.time.localeCompare(b.time);
+        }
+        return a.title.localeCompare(b.title);
+      }
+      
+      // For different SOPs or regular items, sort by time first
       if (a.time && b.time) {
         return a.time.localeCompare(b.time);
       }

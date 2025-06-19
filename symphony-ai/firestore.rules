@@ -54,10 +54,7 @@ service cloud.firestore {
 
     // Rules for Standard Operating Procedures
     match /sops/{sopId} {
-      allow read, write: if request.auth != null && 
-        (resource == null || request.auth.uid == resource.data.createdBy);
-      allow create: if request.auth != null && 
-        request.auth.uid == request.resource.data.createdBy;
+      allow read, write, create: if request.auth != null;
     }
 
     match /sop_completions/{completionId} {
@@ -118,6 +115,11 @@ service cloud.firestore {
 
     // Rules for Family Invitations
     match /family_invitations/{invitationId} {
+      allow read, write, create: if request.auth != null;
+    }
+
+    // Rules for Weekly Planning Sessions
+    match /weekly_planning_sessions/{sessionId} {
       allow read, write, create: if request.auth != null;
     }
   }

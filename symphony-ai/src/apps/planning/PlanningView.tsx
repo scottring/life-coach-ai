@@ -31,6 +31,7 @@ import { taskManager, UniversalTask } from '../../shared/services/taskManagerSer
 import { sopService } from '../../shared/services/sopService';
 import { goalService } from '../../shared/services/goalService';
 import { aiPlanningService, PlanningContext, PlanningSession, ContextualItems } from '../../shared/services/aiPlanningService';
+import WeeklyPlanningFlow from '../../components/WeeklyPlanningFlow';
 import './planning-calendar.css';
 
 interface PlanningViewProps {
@@ -97,6 +98,9 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId })
     }
   });
   
+  // Weekly Planning Flow state
+  const [showWeeklyPlanning, setShowWeeklyPlanning] = useState(false);
+
   // Sidebar state
   const [sidebarData, setSidebarData] = useState({
     inbox: [] as SchedulableItem[],
@@ -167,27 +171,57 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId })
   useEffect(() => {
     const initializeAIPlanning = async () => {
       try {
-        // Get contextual items using AI service
-        const items = await aiPlanningService.getContextualItems(planningContext);
-        setContextualItems(items);
+        // Temporarily disabled to fix permissions issue
+        console.log('AI planning initialization temporarily disabled');
         
-        // Update sidebar with contextually filtered data
+        // TODO: Re-enable once permissions are fixed
+        // const items = await aiPlanningService.getContextualItems(planningContext);
+        // setContextualItems(items);
+        
+        // For now, load data directly from services
+        const [goals, projects, sops] = await Promise.all([
+          goalService.getGoalsByContext(contextId).catch(err => {
+            console.error('Error loading goals:', err);
+            return [];
+          }),
+          goalService.getProjectsByContext(contextId).catch(err => {
+            console.error('Error loading projects:', err);
+            return [];
+          }),
+          sopService.getSOPsForContext(contextId).catch(err => {
+            console.error('Error loading SOPs:', err);
+            return [];
+          })
+        ]);
+
+        // Debug: Current contextId being used
+        console.log('🔍 Current contextId:', contextId);
+        console.log('🔍 Current userId:', userId);
+        
+        console.log('Loaded planning data:', { 
+          contextId, 
+          goalsCount: goals.length, 
+          projectsCount: projects.length, 
+          sopsCount: sops.length,
+          sops: sops.map(s => ({ id: s.id, name: s.name, contextId: s.contextId }))
+        });
+        
         setSidebarData({
-          inbox: items.urgentTasks.filter(task => task.source === 'manual' || task.type === 'task'),
-          sops: items.relevantSOPs,
-          projects: items.currentProjects,
-          goals: items.activeGoals
+          inbox: [], // Will be populated by taskManager
+          sops: sops,
+          projects: projects,
+          goals: goals
         });
         
       } catch (error) {
-        console.error('Error initializing AI planning:', error);
+        console.error('Error initializing planning data:', error);
       }
     };
 
     if (contextId && userId) {
       initializeAIPlanning();
     }
-  }, [contextId, userId, planningContext]);
+  }, [contextId, userId]);
 
   // Load all planning data including sidebar sections
   useEffect(() => {
@@ -787,6 +821,15 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId })
               <option value="monthly">Monthly</option>
             </select>
           </div>
+
+          {/* Weekly Planning Session Toggle */}
+          <button
+            onClick={() => setShowWeeklyPlanning(true)}
+            className="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
+          >
+            <CalendarIcon className="w-4 h-4" />
+            <span>Weekly Planning</span>
+          </button>
 
           {/* AI Assistant Toggle */}
           <button
@@ -1459,6 +1502,15 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId })
             </div>
           </div>
         </div>
+      )}
+
+      {/* Weekly Planning Flow */}
+      {showWeeklyPlanning && (
+        <WeeklyPlanningFlow
+          contextId={contextId}
+          userId={userId || 'current_user'}
+          onClose={() => setShowWeeklyPlanning(false)}
+        />
       )}
 
       {/* Task Detail Modal */}

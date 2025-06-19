@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "development": "symphony-6fca4",
+    "production": "lifecoach-ai-c862c",
+    "default": "lifecoach-ai-c862c"
+  }
+}

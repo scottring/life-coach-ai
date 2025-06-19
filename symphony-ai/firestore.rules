@@ -118,8 +118,13 @@ service cloud.firestore {
       allow read, write, create: if request.auth != null;
     }
 
-    // Rules for Weekly Planning Sessions
+    // Rules for Weekly Planning Sessions (legacy)
     match /weekly_planning_sessions/{sessionId} {
+      allow read, write, create: if request.auth != null;
+    }
+
+    // Rules for Planning Sessions (unified weekly/monthly)
+    match /planning_sessions/{sessionId} {
       allow read, write, create: if request.auth != null;
     }
   }

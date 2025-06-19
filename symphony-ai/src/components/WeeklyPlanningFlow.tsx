@@ -5,7 +5,7 @@ import {
   UnscheduledItem, 
   NextWeekTask,
   TaskReviewAction,
-  WeeklySessionStatus
+  PlanningSessionStatus
 } from '../shared/types/goals';
 import { weeklyPlanningService } from '../shared/services/weeklyPlanningService';
 import { 
@@ -461,7 +461,7 @@ const PlanningStep: React.FC<{
           {/* Scheduled Tasks */}
           <div className="space-y-2">
             <h4 className="font-medium text-gray-700">Scheduled Tasks</h4>
-            {session?.planningPhase.nextWeekTasks.map((task) => (
+            {session?.planningPhase.nextPeriodTasks.map((task: NextWeekTask) => (
               <div key={task.taskId} className="p-2 bg-green-50 border border-green-200 rounded">
                 <div className="text-sm text-green-800">
                   Task {task.taskId} - {new Date(task.dueDate).toLocaleDateString()}
@@ -496,7 +496,7 @@ const FinalizeStep: React.FC<{
     </h3>
     <div className="text-gray-600 mb-8 space-y-2">
       <p>Tasks reviewed: {session?.reviewPhase.taskReviews.length || 0}</p>
-      <p>Tasks scheduled: {session?.planningPhase.nextWeekTasks.length || 0}</p>
+      <p>Tasks scheduled: {session?.planningPhase.nextPeriodTasks.length || 0}</p>
     </div>
     <button
       onClick={onClose}

@@ -146,10 +146,11 @@ export interface GoalMetrics {
   priorityBreakdown: Record<GoalPriority, number>;
 }
 
-// Weekly Planning Types (based on goal-todo approach)
+// Planning Types (based on goal-todo approach)
 export type TaskReviewAction = 'mark_completed' | 'push_forward' | 'mark_missed' | 'archive' | 'close';
 export type TaskReviewStatus = 'completed' | 'missed' | 'needs_review' | 'pushed_forward';
-export type WeeklySessionStatus = 'not_started' | 'review_phase' | 'planning_phase' | 'completed';
+export type PlanningSessionType = 'weekly' | 'monthly' | 'seasonal' | 'annual';
+export type PlanningSessionStatus = 'not_started' | 'review_phase' | 'planning_phase' | 'completed';
 
 export interface TaskReviewItem {
   taskId: string;
@@ -205,13 +206,104 @@ export interface SharedGoalReview {
   assignedTasks: { taskId: string; userId: string }[];
 }
 
-export interface WeeklyPlanningSession {
+// Monthly Planning Specific Types
+export interface FinancialReview {
+  monthlyBudget: {
+    income: number;
+    expenses: number;
+    savings: number;
+    categories: { [category: string]: { budgeted: number; actual: number } };
+  };
+  expenditureReview: {
+    largeExpenses: { item: string; amount: number; category: string; necessary: boolean }[];
+    categoryOverages: string[];
+    savingsGoalProgress: number;
+  };
+  upcomingBigItems: {
+    item: string;
+    estimatedCost: number;
+    targetMonth: string;
+    priority: 'high' | 'medium' | 'low';
+  }[];
+}
+
+export interface ProjectTask {
   id: string;
+  title: string;
+  dueDate?: string;
+  priority: 'high' | 'medium' | 'low';
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+  estimatedHours: number;
+  completedAt?: string;
+}
+
+export interface ProjectPrioritization {
+  activeProjects: {
+    projectId: string;
+    title: string;
+    priority: number;
+    progress: number;
+    blockers: string[];
+    nextMonthGoals: string[];
+    tasks?: ProjectTask[];
+  }[];
+  proposedProjects: {
+    title: string;
+    description: string;
+    estimatedEffort: 'small' | 'medium' | 'large';
+    urgency: 'high' | 'medium' | 'low';
+    dependencies: string[];
+  }[];
+}
+
+export interface RelationshipParentingReview {
+  relationshipGoals: {
+    area: string;
+    currentState: string;
+    desiredState: string;
+    nextMonthActions: string[];
+  }[];
+  parentingFocus: {
+    childName: string;
+    currentChallenges: string[];
+    wins: string[];
+    nextMonthPriorities: string[];
+  }[];
+  coupleTime: {
+    lastMonthQuality: number; // 1-10 scale
+    upcomingOpportunities: string[];
+    scheduledDates: string[];
+  };
+}
+
+export interface RoutineDelegationReview {
+  currentDelegations: {
+    task: string;
+    assignedTo: string;
+    effectiveness: number; // 1-10 scale
+    adjustmentsNeeded: string[];
+  }[];
+  newDelegationOpportunities: {
+    task: string;
+    potentialAssignee: string;
+    estimatedTimesSaved: number;
+  }[];
+  familyWorkloadBalance: {
+    memberName: string;
+    currentLoad: number; // 1-10 scale
+    satisfaction: number; // 1-10 scale
+  }[];
+}
+
+// Base Planning Session (supports both weekly and monthly)
+export interface PlanningSession {
+  id: string;
+  type: PlanningSessionType;
   ownerId: string;
   contextId: string;
-  weekStartDate: string;
-  weekEndDate: string;
-  status: WeeklySessionStatus;
+  periodStartDate: string;
+  periodEndDate: string;
+  status: PlanningSessionStatus;
   createdAt: string;
   updatedAt: string;
   
@@ -226,19 +318,31 @@ export interface WeeklyPlanningSession {
       totalArchived: number;
       totalClosed: number;
     };
+    // Monthly-specific reviews
+    financialReview?: FinancialReview;
+    relationshipParentingReview?: RelationshipParentingReview;
+    routineDelegationReview?: RoutineDelegationReview;
   };
   
   planningPhase: {
-    nextWeekTasks: NextWeekTask[];
-    recurringTasks: any[]; // TODO: Define proper type
-    sharedGoalAssignments: any[]; // TODO: Define proper type
+    nextPeriodTasks: NextWeekTask[]; // For weekly: next week, for monthly: next month
+    recurringTasks: any[];
+    sharedGoalAssignments: any[];
     calendarSyncStatus: {
       synced: boolean;
       syncedEvents: CalendarEvent[];
       lastSyncedAt?: string;
     };
+    // Monthly-specific planning
+    projectPrioritization?: ProjectPrioritization;
+    toolUpdates?: string[];
+    shoppingListUpdates?: string[];
+    biggerPictureConcerns?: string[];
   };
 }
+
+// Keep the old WeeklyPlanningSession for backward compatibility
+export type WeeklyPlanningSession = PlanningSession;
 
 // For drag and drop integration with calendar
 export interface SchedulableItem {

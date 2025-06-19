@@ -32,6 +32,7 @@ import { sopService } from '../../shared/services/sopService';
 import { goalService } from '../../shared/services/goalService';
 import { aiPlanningService, PlanningContext, PlanningSession, ContextualItems } from '../../shared/services/aiPlanningService';
 import WeeklyPlanningFlow from '../../components/WeeklyPlanningFlow';
+import { MonthlyPlanningFlow } from '../../components/MonthlyPlanningFlow';
 import './planning-calendar.css';
 
 interface PlanningViewProps {
@@ -100,6 +101,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId })
   
   // Weekly Planning Flow state
   const [showWeeklyPlanning, setShowWeeklyPlanning] = useState(false);
+  const [showMonthlyPlanning, setShowMonthlyPlanning] = useState(false);
 
   // Sidebar state
   const [sidebarData, setSidebarData] = useState({
@@ -681,7 +683,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId })
       setAiMessage('');
       
       // Refresh session data
-      const updatedSession = aiPlanningService.getSession(planningSession.id);
+      const updatedSession = await aiPlanningService.getSession(planningSession.id);
       if (updatedSession) {
         setPlanningSession(updatedSession);
       }
@@ -697,7 +699,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId })
       await aiPlanningService.switchMode(planningSession.id, mode);
       
       // Refresh session data
-      const updatedSession = aiPlanningService.getSession(planningSession.id);
+      const updatedSession = await aiPlanningService.getSession(planningSession.id);
       if (updatedSession) {
         setPlanningSession(updatedSession);
       }
@@ -822,14 +824,24 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId })
             </select>
           </div>
 
-          {/* Weekly Planning Session Toggle */}
-          <button
-            onClick={() => setShowWeeklyPlanning(true)}
-            className="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
-          >
-            <CalendarIcon className="w-4 h-4" />
-            <span>Weekly Planning</span>
-          </button>
+          {/* Planning Session Toggles */}
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setShowWeeklyPlanning(true)}
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors bg-blue-600 text-white hover:bg-blue-700"
+            >
+              <CalendarIcon className="w-4 h-4" />
+              <span>Weekly Planning</span>
+            </button>
+            
+            <button
+              onClick={() => setShowMonthlyPlanning(true)}
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors bg-purple-600 text-white hover:bg-purple-700"
+            >
+              <CalendarIcon className="w-4 h-4" />
+              <span>Monthly Planning</span>
+            </button>
+          </div>
 
           {/* AI Assistant Toggle */}
           <button
@@ -1511,6 +1523,27 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ contextId, userId })
           userId={userId || 'current_user'}
           onClose={() => setShowWeeklyPlanning(false)}
         />
+      )}
+
+      {/* Monthly Planning Flow */}
+      {showMonthlyPlanning && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-semibold">Monthly Planning Session</h2>
+              <button
+                onClick={() => setShowMonthlyPlanning(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+            <MonthlyPlanningFlow
+              contextId={contextId}
+              onComplete={() => setShowMonthlyPlanning(false)}
+            />
+          </div>
+        </div>
       )}
 
       {/* Task Detail Modal */}

@@ -3,6 +3,8 @@ import { sopService } from './sopService';
 import { taskManager } from './taskManagerService';
 import { calendarService } from './calendarService';
 import { familyContextService, FamilyMember, FamilyContext } from './familyContextService';
+import { auth, db } from './firebase';
+import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, getDocs, serverTimestamp, onSnapshot, Timestamp } from 'firebase/firestore';
 
 export interface PlanningContext {
   participants: string[]; // User IDs in the planning session
@@ -94,6 +96,8 @@ export interface Conflict {
 class AIPlanningService {
   private sessions: Map<string, PlanningSession> = new Map();
   private contextCache: Map<string, ContextualItems> = new Map();
+  private firestoreEnabled = true;
+  private sessionListeners: Map<string, () => void> = new Map();
 
   // Start a new planning session
   async startPlanningSession(context: PlanningContext): Promise<PlanningSession> {
@@ -112,6 +116,9 @@ class AIPlanningService {
     };
 
     this.sessions.set(sessionId, session);
+
+    // Save to Firestore
+    await this.savePlanningSession(session);
 
     // If this is a family planning session, also start a family session
     if (context.scope === 'family' && context.familyContextId && context.participants.length > 1) {
@@ -141,6 +148,9 @@ class AIPlanningService {
     session.mode = mode;
     session.updatedAt = new Date();
 
+    // Save to Firestore
+    await this.savePlanningSession(session);
+
     if (mode === 'guided') {
       await this.addAIMessage(sessionId, "I'm back to help guide your planning. What would you like to work on?");
     } else {
@@ -151,6 +161,13 @@ class AIPlanningService {
   // Get contextually relevant items
   async getContextualItems(context: PlanningContext): Promise<ContextualItems> {
     const cacheKey = `${context.contextId}_${context.scope}_${context.timeframe}`;
+    
+    // Try to load from Firestore cache first
+    const cachedItems = await this.loadContextualItems(cacheKey);
+    if (cachedItems) {
+      this.contextCache.set(cacheKey, cachedItems);
+      return cachedItems;
+    }
     
     if (this.contextCache.has(cacheKey)) {
       return this.contextCache.get(cacheKey)!;
@@ -177,6 +194,9 @@ class AIPlanningService {
     // Cache for 5 minutes
     this.contextCache.set(cacheKey, contextualItems);
     setTimeout(() => this.contextCache.delete(cacheKey), 5 * 60 * 1000);
+
+    // Save to Firestore cache
+    await this.saveContextualItems(cacheKey, contextualItems);
 
     return contextualItems;
   }
@@ -336,6 +356,10 @@ class AIPlanningService {
     };
 
     session.decisions.push(planningDecision);
+    session.updatedAt = new Date();
+
+    // Save to Firestore
+    await this.savePlanningSession(session);
 
     if (decision === 'accepted' || decision === 'modified') {
       await this.executeScheduling(planningDecision.finalItem, suggestion.suggestedTime, suggestion.suggestedAssignee);
@@ -721,6 +745,9 @@ Should we start by scheduling your regular SOPs, or would you prefer to tackle t
 
     session.conversation.push(message);
     session.updatedAt = new Date();
+
+    // Save to Firestore
+    await this.savePlanningSession(session);
   }
 
   private async addAIMessage(sessionId: string, content: string, type: 'text' | 'suggestion' | 'question' | 'confirmation' = 'text', metadata?: any): Promise<void> {
@@ -738,6 +765,9 @@ Should we start by scheduling your regular SOPs, or would you prefer to tackle t
 
     session.conversation.push(message);
     session.updatedAt = new Date();
+
+    // Save to Firestore
+    await this.savePlanningSession(session);
   }
 
   private daysSince(date: string): number {
@@ -765,17 +795,263 @@ Should we start by scheduling your regular SOPs, or would you prefer to tackle t
     return patterns.evening || 'low';
   }
 
+  // Firestore persistence methods
+  private async savePlanningSession(session: PlanningSession): Promise<void> {
+    if (!this.firestoreEnabled || !auth.currentUser) return;
+
+    try {
+      const docRef = doc(db, 'ai_planning_sessions', session.id);
+      const sessionData = {
+        ...session,
+        userId: auth.currentUser.uid,
+        createdAt: session.createdAt instanceof Date ? Timestamp.fromDate(session.createdAt) : session.createdAt,
+        updatedAt: serverTimestamp(),
+        // Convert conversation timestamps
+        conversation: session.conversation.map(msg => ({
+          ...msg,
+          timestamp: msg.timestamp instanceof Date ? Timestamp.fromDate(msg.timestamp) : msg.timestamp
+        })),
+        // Convert decision timestamps
+        decisions: session.decisions.map(decision => ({
+          ...decision,
+          timestamp: decision.timestamp instanceof Date ? Timestamp.fromDate(decision.timestamp) : decision.timestamp
+        }))
+      };
+      
+      await setDoc(docRef, sessionData, { merge: true });
+    } catch (error) {
+      console.error('Error saving planning session:', error);
+      // Continue without throwing to maintain app functionality
+    }
+  }
+
+  private async loadPlanningSession(sessionId: string): Promise<PlanningSession | null> {
+    if (!this.firestoreEnabled || !auth.currentUser) return null;
+
+    try {
+      const docRef = doc(db, 'ai_planning_sessions', sessionId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        // Convert Firestore timestamps back to Date objects
+        const session: PlanningSession = {
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          conversation: data.conversation?.map((msg: any) => ({
+            ...msg,
+            timestamp: msg.timestamp?.toDate() || new Date()
+          })) || [],
+          decisions: data.decisions?.map((decision: any) => ({
+            ...decision,
+            timestamp: decision.timestamp?.toDate() || new Date()
+          })) || []
+        } as PlanningSession;
+        
+        return session;
+      }
+    } catch (error) {
+      console.error('Error loading planning session:', error);
+    }
+    
+    return null;
+  }
+
+  private async saveContextualItems(cacheKey: string, items: ContextualItems): Promise<void> {
+    if (!this.firestoreEnabled || !auth.currentUser) return;
+
+    try {
+      const docRef = doc(db, 'ai_contextual_cache', cacheKey);
+      await setDoc(docRef, {
+        ...items,
+        userId: auth.currentUser.uid,
+        cachedAt: serverTimestamp(),
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+      }, { merge: true });
+    } catch (error) {
+      console.error('Error saving contextual items:', error);
+    }
+  }
+
+  private async loadContextualItems(cacheKey: string): Promise<ContextualItems | null> {
+    if (!this.firestoreEnabled || !auth.currentUser) return null;
+
+    try {
+      const docRef = doc(db, 'ai_contextual_cache', cacheKey);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        
+        // Check if cache is expired
+        if (data.expiresAt && data.expiresAt.toDate() < new Date()) {
+          await deleteDoc(docRef);
+          return null;
+        }
+        
+        // Remove metadata fields
+        const { userId, cachedAt, expiresAt, ...items } = data;
+        return items as ContextualItems;
+      }
+    } catch (error) {
+      console.error('Error loading contextual items:', error);
+    }
+    
+    return null;
+  }
+
+  // Load user's planning sessions from Firestore
+  async loadUserSessions(): Promise<PlanningSession[]> {
+    if (!this.firestoreEnabled || !auth.currentUser) return [];
+
+    try {
+      const q = query(
+        collection(db, 'ai_planning_sessions'),
+        where('userId', '==', auth.currentUser.uid),
+        orderBy('updatedAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const sessions: PlanningSession[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const session: PlanningSession = {
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          conversation: data.conversation?.map((msg: any) => ({
+            ...msg,
+            timestamp: msg.timestamp?.toDate() || new Date()
+          })) || [],
+          decisions: data.decisions?.map((decision: any) => ({
+            ...decision,
+            timestamp: decision.timestamp?.toDate() || new Date()
+          })) || []
+        } as PlanningSession;
+        
+        sessions.push(session);
+        this.sessions.set(session.id, session);
+      });
+      
+      return sessions;
+    } catch (error) {
+      console.error('Error loading user sessions:', error);
+      return [];
+    }
+  }
+
+  // Subscribe to real-time session updates
+  subscribeToSession(sessionId: string, callback: (session: PlanningSession) => void): () => void {
+    if (!this.firestoreEnabled || !auth.currentUser) return () => {};
+
+    const docRef = doc(db, 'ai_planning_sessions', sessionId);
+    const unsubscribe = onSnapshot(docRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        const session: PlanningSession = {
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          conversation: data.conversation?.map((msg: any) => ({
+            ...msg,
+            timestamp: msg.timestamp?.toDate() || new Date()
+          })) || [],
+          decisions: data.decisions?.map((decision: any) => ({
+            ...decision,
+            timestamp: decision.timestamp?.toDate() || new Date()
+          })) || []
+        } as PlanningSession;
+        
+        this.sessions.set(sessionId, session);
+        callback(session);
+      }
+    });
+
+    this.sessionListeners.set(sessionId, unsubscribe);
+    return unsubscribe;
+  }
+
   // Public methods for getting session data
-  getSession(sessionId: string): PlanningSession | undefined {
-    return this.sessions.get(sessionId);
+  async getSession(sessionId: string): Promise<PlanningSession | undefined> {
+    // Try memory first
+    let session = this.sessions.get(sessionId);
+    
+    // If not in memory, try Firestore
+    if (!session) {
+      session = await this.loadPlanningSession(sessionId) || undefined;
+      if (session) {
+        this.sessions.set(sessionId, session);
+      }
+    }
+    
+    return session;
   }
 
-  getAllSessions(): PlanningSession[] {
-    return Array.from(this.sessions.values());
+  async getAllSessions(): Promise<PlanningSession[]> {
+    // Load from Firestore to ensure we have latest data
+    const firestoreSessions = await this.loadUserSessions();
+    
+    // Merge with any memory-only sessions
+    const allSessions = new Map<string, PlanningSession>();
+    
+    // Add Firestore sessions
+    firestoreSessions.forEach(session => allSessions.set(session.id, session));
+    
+    // Add any memory-only sessions
+    this.sessions.forEach((session, id) => {
+      if (!allSessions.has(id)) {
+        allSessions.set(id, session);
+      }
+    });
+    
+    return Array.from(allSessions.values());
   }
 
-  deleteSession(sessionId: string): boolean {
-    return this.sessions.delete(sessionId);
+  async deleteSession(sessionId: string): Promise<boolean> {
+    // Remove from memory
+    const memoryDeleted = this.sessions.delete(sessionId);
+    
+    // Remove listener if exists
+    const listener = this.sessionListeners.get(sessionId);
+    if (listener) {
+      listener();
+      this.sessionListeners.delete(sessionId);
+    }
+    
+    // Remove from Firestore
+    if (this.firestoreEnabled && auth.currentUser) {
+      try {
+        const docRef = doc(db, 'ai_planning_sessions', sessionId);
+        await deleteDoc(docRef);
+        return true;
+      } catch (error) {
+        console.error('Error deleting session from Firestore:', error);
+        return memoryDeleted;
+      }
+    }
+    
+    return memoryDeleted;
+  }
+
+  // Clean up expired cache entries
+  async cleanupExpiredCache(): Promise<void> {
+    if (!this.firestoreEnabled || !auth.currentUser) return;
+
+    try {
+      const q = query(
+        collection(db, 'ai_contextual_cache'),
+        where('userId', '==', auth.currentUser.uid),
+        where('expiresAt', '<', new Date())
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+    } catch (error) {
+      console.error('Error cleaning up expired cache:', error);
+    }
   }
 }
 
